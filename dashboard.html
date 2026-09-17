@@ -565,7 +565,9 @@
         if (!iso) return '—';
         try {
           const d = new Date(iso);
-          return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          const datePart = d.toLocaleDateString([], { year: 'numeric', month: 'short', day: '2-digit' });
+          const timePart = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          return datePart + ' ' + timePart;
         } catch (e) { return iso; }
       }
 
