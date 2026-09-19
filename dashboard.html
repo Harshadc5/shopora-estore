@@ -8,6 +8,7 @@
   <link rel="icon" href="./favicon.svg">
   <style>
     :root {
+      color-scheme: light;
       --navy: #10243e;
       --navy-2: #183654;
       --ink: #182230;
@@ -21,7 +22,90 @@
       --soft: #f3f5f7;
       --line: #e4e7ec;
       --shadow: 0 10px 30px rgba(16, 36, 62, .10);
-      --radius: 14px
+      --radius: 14px;
+      --body-bg: #f5f6f8;
+      --input-bg: #fff;
+      --input-border: #d0d5dd;
+      --card-shadow: 0 3px 16px rgba(16, 36, 62, .05);
+      --card-shadow-lg: 0 3px 12px rgba(16, 36, 62, .04);
+      --text-strong: #344054;
+      --chip-homepage-bg: #eaf1ff;
+      --chip-homepage-ink: var(--blue-dark);
+      --chip-cart-bg: #fff4d6;
+      --chip-cart-ink: #7a4f00;
+      --chip-pdp-bg: #eafaf2;
+      --chip-pdp-ink: var(--green);
+      --chip-category-bg: #f3ecff;
+      --chip-category-ink: #6a3bd1;
+      --chip-checkout-bg: #ffe9e6;
+      --chip-checkout-ink: #b02a20;
+      --chip-interaction-bg: #e6f7fb;
+      --chip-interaction-ink: #0f6674;
+      --warn-bg: #fff4e5;
+      --warn-border: #ffdca8;
+      --warn-ink: #8a5400;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        color-scheme: dark;
+        --ink: #e7ebf0;
+        --muted: #98a2b3;
+        --surface: #171d2b;
+        --soft: #1f2735;
+        --line: #2b3345;
+        --body-bg: #0f1420;
+        --input-bg: #1c2333;
+        --input-border: #3a4356;
+        --card-shadow: 0 3px 16px rgba(0, 0, 0, .35);
+        --card-shadow-lg: 0 3px 12px rgba(0, 0, 0, .3);
+        --text-strong: #cbd5e1;
+        --chip-homepage-bg: #16324f;
+        --chip-homepage-ink: #7fb2f2;
+        --chip-cart-bg: #4a3a0e;
+        --chip-cart-ink: #f0c65e;
+        --chip-pdp-bg: #123a2c;
+        --chip-pdp-ink: #4fd8a5;
+        --chip-category-bg: #2c2049;
+        --chip-category-ink: #b79bf0;
+        --chip-checkout-bg: #4a1f1a;
+        --chip-checkout-ink: #f18d80;
+        --chip-interaction-bg: #0f3138;
+        --chip-interaction-ink: #5fd4e8;
+        --warn-bg: #3d2c10;
+        --warn-border: #6b4e17;
+        --warn-ink: #f0c065;
+      }
+    }
+
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --ink: #e7ebf0;
+      --muted: #98a2b3;
+      --surface: #171d2b;
+      --soft: #1f2735;
+      --line: #2b3345;
+      --body-bg: #0f1420;
+      --input-bg: #1c2333;
+      --input-border: #3a4356;
+      --card-shadow: 0 3px 16px rgba(0, 0, 0, .35);
+      --card-shadow-lg: 0 3px 12px rgba(0, 0, 0, .3);
+      --text-strong: #cbd5e1;
+      --chip-homepage-bg: #16324f;
+      --chip-homepage-ink: #7fb2f2;
+      --chip-cart-bg: #4a3a0e;
+      --chip-cart-ink: #f0c65e;
+      --chip-pdp-bg: #123a2c;
+      --chip-pdp-ink: #4fd8a5;
+      --chip-category-bg: #2c2049;
+      --chip-category-ink: #b79bf0;
+      --chip-checkout-bg: #4a1f1a;
+      --chip-checkout-ink: #f18d80;
+      --chip-interaction-bg: #0f3138;
+      --chip-interaction-ink: #5fd4e8;
+      --warn-bg: #3d2c10;
+      --warn-border: #6b4e17;
+      --warn-ink: #f0c065;
     }
 
     * {
@@ -34,10 +118,11 @@
 
     body {
       margin: 0;
-      background: #f5f6f8;
+      background: var(--body-bg);
       color: var(--ink);
       font-family: Inter, system-ui, -apple-system, sans-serif;
-      line-height: 1.5
+      line-height: 1.5;
+      transition: background .15s ease, color .15s ease
     }
 
     a {
@@ -112,6 +197,25 @@
       background: #8a97a6
     }
 
+    .theme-toggle {
+      border: 1px solid rgba(255, 255, 255, .18);
+      background: rgba(255, 255, 255, .08);
+      color: #dce7f3;
+      border-radius: 8px;
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      font-size: .95rem;
+      cursor: pointer;
+      flex: none;
+      line-height: 1
+    }
+
+    .theme-toggle:hover {
+      background: rgba(255, 255, 255, .16)
+    }
+
     .status-pill.live .status-dot {
       background: #33d689;
       box-shadow: 0 0 0 3px rgba(51, 214, 137, .25);
@@ -146,11 +250,11 @@
     }
 
     .toolbar select {
-      border: 1px solid #d0d5dd;
+      border: 1px solid var(--input-border);
       border-radius: 9px;
       padding: .6rem .85rem;
       font: inherit;
-      background: #fff;
+      background: var(--input-bg);
       color: var(--ink)
     }
 
@@ -159,7 +263,7 @@
       border: 1px solid var(--line);
       border-radius: var(--radius);
       padding: 1rem 1.1rem;
-      box-shadow: 0 3px 16px rgba(16, 36, 62, .05)
+      box-shadow: var(--card-shadow)
     }
 
     .stat-card span {
@@ -190,16 +294,17 @@
     .toolbar input[type="search"] {
       flex: 1;
       min-width: 220px;
-      border: 1px solid #d0d5dd;
+      border: 1px solid var(--input-border);
       border-radius: 9px;
       padding: .6rem .85rem;
       font: inherit;
-      background: #fff
+      background: var(--input-bg);
+      color: var(--ink)
     }
 
     .toolbar button {
-      border: 1px solid #d0d5dd;
-      background: #fff;
+      border: 1px solid var(--input-border);
+      background: var(--input-bg);
       border-radius: 9px;
       padding: .6rem .9rem;
       font: inherit;
@@ -217,7 +322,7 @@
     .empty-state {
       text-align: center;
       padding: 4rem 1rem;
-      background: #fff;
+      background: var(--surface);
       border: 1px dashed var(--line);
       border-radius: var(--radius);
       color: var(--muted)
@@ -235,10 +340,10 @@
     }
 
     .event-card {
-      background: #fff;
+      background: var(--surface);
       border: 1px solid var(--line);
       border-radius: 12px;
-      box-shadow: 0 3px 12px rgba(16, 36, 62, .04);
+      box-shadow: var(--card-shadow-lg);
       overflow: hidden;
       animation: slide-in .3s ease
     }
@@ -283,33 +388,33 @@
     }
 
     .page-chip.homepage {
-      background: #eaf1ff;
-      color: var(--blue-dark)
+      background: var(--chip-homepage-bg);
+      color: var(--chip-homepage-ink)
     }
 
     .page-chip.cart {
-      background: #fff4d6;
-      color: #7a4f00
+      background: var(--chip-cart-bg);
+      color: var(--chip-cart-ink)
     }
 
     .page-chip.pdp {
-      background: #eafaf2;
-      color: var(--green)
+      background: var(--chip-pdp-bg);
+      color: var(--chip-pdp-ink)
     }
 
     .page-chip.category {
-      background: #f3ecff;
-      color: #6a3bd1
+      background: var(--chip-category-bg);
+      color: var(--chip-category-ink)
     }
 
     .page-chip.checkout {
-      background: #ffe9e6;
-      color: #b02a20
+      background: var(--chip-checkout-bg);
+      color: var(--chip-checkout-ink)
     }
 
     .page-chip.interaction_events {
-      background: #e6f7fb;
-      color: #0f6674
+      background: var(--chip-interaction-bg);
+      color: var(--chip-interaction-ink)
     }
 
     .page-chip-stack {
@@ -392,13 +497,13 @@
       border: 1px solid var(--line);
       border-radius: 99px;
       padding: .22rem .6rem;
-      color: #344054
+      color: var(--text-strong)
     }
 
     .signal-badge.warn {
-      background: #fff4e5;
-      border-color: #ffdca8;
-      color: #8a5400
+      background: var(--warn-bg);
+      border-color: var(--warn-border);
+      color: var(--warn-ink)
     }
 
     .event-body {
@@ -462,6 +567,15 @@
       }
     }
   </style>
+  <script>
+    // Applied before paint to avoid a flash of the wrong theme on load.
+    try {
+      var savedTheme = localStorage.getItem('aiora-dashboard-theme');
+      if (savedTheme === 'light' || savedTheme === 'dark') {
+        document.documentElement.setAttribute('data-theme', savedTheme);
+      }
+    } catch (e) { }
+  </script>
 </head>
 
 <body>
@@ -474,6 +588,8 @@
       </div>
       <span class="status-pill" id="statusPill"><span class="status-dot"></span><span
           id="statusText">Connecting…</span></span>
+      <button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle dark mode"
+        title="Toggle dark mode">🌙</button>
     </div>
   </header>
 
@@ -519,7 +635,7 @@
 
     <div style="text-align:center;margin-top:1rem">
       <button id="loadOlderBtn"
-        style="border:1px solid #d0d5dd;background:#fff;border-radius:9px;padding:.7rem 1.4rem;font:inherit;font-weight:700;cursor:pointer">Load
+        style="border:1px solid var(--input-border);background:var(--input-bg);color:var(--ink);border-radius:9px;padding:.7rem 1.4rem;font:inherit;font-weight:700;cursor:pointer">Load
         older events</button>
       <div id="loadOlderStatus" style="font-size:.72rem;color:var(--muted);margin-top:.5rem"></div>
     </div>
@@ -890,6 +1006,25 @@
       loadOlderBtn.addEventListener('click', loadOlderBatch);
       pageTypeSelect.addEventListener('change', loadInitialBatch);
       batchSizeSelect.addEventListener('change', loadInitialBatch);
+
+      const themeToggle = document.querySelector('#themeToggle');
+      function currentlyDark() {
+        var explicit = document.documentElement.getAttribute('data-theme');
+        if (explicit) return explicit === 'dark';
+        return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      }
+      function syncThemeIcon() {
+        if (themeToggle) themeToggle.textContent = currentlyDark() ? '☀️' : '🌙';
+      }
+      if (themeToggle) {
+        themeToggle.addEventListener('click', () => {
+          const next = currentlyDark() ? 'light' : 'dark';
+          document.documentElement.setAttribute('data-theme', next);
+          try { localStorage.setItem('aiora-dashboard-theme', next); } catch (e) { }
+          syncThemeIcon();
+        });
+        syncThemeIcon();
+      }
 
       async function init() {
         let config;
