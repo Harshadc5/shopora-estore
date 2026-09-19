@@ -18,7 +18,13 @@ const PROMO_CODES = {
 
 const cart = loadCart();
 const wishlist = new Set(loadJSON(WISHLIST_KEY, []));
-let activePromo = loadJSON(PROMO_KEY, null);
+// Promo lives in sessionStorage, not localStorage — it should survive normal
+// page navigation within a visit (cart -> checkout) but be wiped the moment
+// the tab actually closes, unlike the cart/wishlist which persist for real.
+function loadPromo() {
+  try { return JSON.parse(sessionStorage.getItem(PROMO_KEY)) ?? null; } catch { return null; }
+}
+let activePromo = loadPromo();
 const currentPage = location.pathname.split('/').pop() || 'index.html';
 
 function applyPromo(code, page) {
@@ -29,7 +35,7 @@ function applyPromo(code, page) {
     return;
   }
   activePromo = normalized;
-  localStorage.setItem(PROMO_KEY, JSON.stringify(activePromo));
+  sessionStorage.setItem(PROMO_KEY, JSON.stringify(activePromo));
   toast('Promo code applied!', 'success');
   if (page === 'cart') renderCart();
   if (page === 'checkout') renderCheckout();
@@ -37,7 +43,7 @@ function applyPromo(code, page) {
 
 function removePromo(page) {
   activePromo = null;
-  localStorage.removeItem(PROMO_KEY);
+  sessionStorage.removeItem(PROMO_KEY);
   toast('Promo code removed.', 'success');
   if (page === 'cart') renderCart();
   if (page === 'checkout') renderCheckout();
@@ -74,7 +80,17 @@ function cartSubtotal() { return cartItems().reduce((sum, item) => sum + retailP
 function cartSavings() { return cartItems().reduce((sum, item) => sum + (retailOldPrice(item) - retailPrice(item)) * item.quantity, 0); }
 function deliveryFor(subtotal) { return subtotal > 0 && subtotal < FREE_DELIVERY_MIN ? DELIVERY_FEE : 0; }
 
-function saveCart() { localStorage.setItem(CART_KEY, JSON.stringify(cart)); updateHeaderCounts(); }
+function saveCart() {
+  localStorage.setItem(CART_KEY, JSON.stringify(cart));
+  // An empty cart has nothing left for a promo to discount — carrying one
+  // over into whatever gets added next is exactly the stale-state confusion
+  // this is meant to prevent.
+  if (Object.keys(cart).length === 0 && activePromo) {
+    activePromo = null;
+    sessionStorage.removeItem(PROMO_KEY);
+  }
+  updateHeaderCounts();
+}
 function saveWishlist() { localStorage.setItem(WISHLIST_KEY, JSON.stringify([...wishlist])); updateHeaderCounts(); }
 function addToCart(id, quantity = 1) {
   const product = products.find((item) => item.id === id);
