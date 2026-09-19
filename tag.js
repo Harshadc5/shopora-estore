@@ -675,6 +675,7 @@
             cartTotal: ['#summaryTotal', '[data-automation-id="totalsTotal"]'],
             cartSavings: ['#summarySavings'],
             cartDelivery: ['#summaryDelivery'],
+            cartMarkdown: ['#markdownAmt'],
             cartTax: ['.summary-tax', '#summaryTax', '[data-automation-id="summaryTax"]'],
             cartPromotions: ['.cart-discount', '.promo-applied', '[data-automation-id="appliedPromotion"]', '#promoRow'],
             cartShippingThreshold: ['.shipping-threshold', '#shippingProgress', '.shipping-progress'],
@@ -1467,7 +1468,15 @@
                 if (parsedDel) result.delivery_numeric = parsedDel.amount;
             }
 
+            var markdownEl = firstMatch(doc, FIELD_SEL.cartMarkdown);
+            var markdownDiscountAmt = 0;
+            if (markdownEl) {
+                var parsedMarkdown = parsePrice(markdownEl.textContent);
+                if (parsedMarkdown) markdownDiscountAmt = Math.abs(parsedMarkdown.amount);
+            }
+
             var itemLabelEl = doc.querySelector('#cartItemLabel');
+
             if (itemLabelEl) {
                 var n = parseInt(itemLabelEl.textContent);
                 if (!isNaN(n)) result.item_count = n;
@@ -1606,8 +1615,9 @@
                     // not yet eligible; once eligible there's no gap to imply
                     // a threshold from.
                     if (result.free_shipping_eligibility === 'not-eligible' && result.subtotal_numeric != null) {
-                        result.free_shipping_threshold_value = +(result.subtotal_numeric + nudgeAmount).toFixed(2);
+                        result.free_shipping_threshold_value = +(result.subtotal_numeric - markdownDiscountAmt + nudgeAmount).toFixed(2);
                     }
+
                 }
             }
 

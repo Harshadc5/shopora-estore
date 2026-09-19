@@ -331,19 +331,36 @@ function renderCart() {
   const container = document.querySelector('#cartItems');
   if (!container) return;
   const items = cartItems(), subtotal = cartSubtotal(), delivery = deliveryFor(subtotal), savings = cartSavings();
+  const listSubtotal = items.reduce((sum, item) => sum + retailOldPrice(item) * item.quantity, 0);
   const promoDiscount = calculatePromoDiscount(subtotal, delivery);
   const finalTotal = subtotal + delivery - promoDiscount;
   document.querySelector('#summaryItems').textContent = String(cartCount());
-  document.querySelector('#summarySubtotal').textContent = money(subtotal);
+  document.querySelector('#summaryListTotal').textContent = money(listSubtotal);
+  document.querySelector('#summarySubtotal').textContent = money(listSubtotal);
   document.querySelector('#summaryDelivery').textContent = delivery ? money(delivery) : 'FREE';
-  const totalSavings = savings + promoDiscount;
-  document.querySelector('#summarySavings').textContent = money(totalSavings);
+
+  // Markdown line — real per-item markdown, aggregated across the cart.
+  const markdownRow = document.querySelector('#markdownRow');
+  if (markdownRow) {
+    if (savings > 0) {
+      markdownRow.style.display = 'flex';
+      const markedDownItems = items.filter((item) => item.oldPrice > item.price);
+      const pcts = [...new Set(markedDownItems.map(discount))];
+      document.querySelector('#markdownLabel').textContent = pcts.length === 1 ? `Markdown (${pcts[0]}% off original)` : 'Markdown';
+      document.querySelector('#markdownAmt').textContent = '-' + money(savings);
+    } else {
+      markdownRow.style.display = 'none';
+    }
+  }
 
   const promoRow = document.querySelector('#promoRow');
   if (promoRow) {
     if (activePromo && promoDiscount > 0) {
       promoRow.style.display = 'flex';
       document.querySelector('#promoCodeName').textContent = activePromo;
+      const promo = PROMO_CODES[activePromo];
+      const promoDescEl = document.querySelector('#promoDesc');
+      if (promoDescEl) promoDescEl.textContent = promo ? (promo.type === 'percent' ? ` code (${promo.value}% off)` : ` code (${money(promo.value)} off)`) : ' code';
       document.querySelector('#summaryPromo').textContent = '-' + money(promoDiscount);
       const removeBtn = document.querySelector('#removePromoBtn');
       if (removeBtn && !removeBtn.hasAttribute('data-bound')) {
@@ -359,25 +376,27 @@ function renderCart() {
   var _cartP = new URLSearchParams(window.location.search);
   var _cartPlus = _cartP.get('identity') === 'logged-in' && _cartP.get('member_tier') === 'plus';
   var _cartPlusRow = document.querySelector('#plusMemberRow');
+  var actualTotal = finalTotal;
   if (_cartPlus) {
     var _cartPlusDisc = subtotal * 0.05;
-    var _cartAdjTotal = finalTotal - _cartPlusDisc;
-    document.querySelector('#summaryTotal').textContent = money(_cartAdjTotal);
+    actualTotal = finalTotal - _cartPlusDisc;
     if (!_cartPlusRow) {
       _cartPlusRow = document.createElement('div');
       _cartPlusRow.id = 'plusMemberRow';
       _cartPlusRow.className = 'summary-row savings';
       _cartPlusRow.innerHTML = '<span>Shopora Plus member <strong style="font-size:0.72rem;background:#f5c518;color:#000;padding:1px 5px;border-radius:50px;">5% off</strong></span><strong id="plusMemberAmt"></strong>';
-      var _cartTotalRow = document.querySelector('#summaryTotal') && document.querySelector('#summaryTotal').closest('.summary-row');
-      if (_cartTotalRow) _cartTotalRow.before(_cartPlusRow);
+      var _breakdown = document.querySelector('.savings-breakdown');
+      if (_breakdown) _breakdown.appendChild(_cartPlusRow);
     }
     var _pAmt = document.querySelector('#plusMemberAmt');
     if (_pAmt) _pAmt.textContent = '-' + money(_cartPlusDisc);
     _cartPlusRow.style.display = 'flex';
   } else {
     if (_cartPlusRow) _cartPlusRow.style.display = 'none';
-    document.querySelector('#summaryTotal').textContent = money(finalTotal);
   }
+
+  document.querySelector('#summaryTotal').textContent = money(actualTotal);
+  document.querySelector('#summarySavings').textContent = money(listSubtotal - actualTotal);
   document.querySelector('#cartItemLabel').textContent = cartCount() + (cartCount() === 1 ? ' item' : ' items');
 
   const btn = document.querySelector('#applyPromoBtn');

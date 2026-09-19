@@ -43,15 +43,24 @@
                 <aside class="summary-card">
                         <h2>Order summary</h2>
                         <div class="summary-row"><span>Items (<span id="summaryItems">0</span>)</span><strong
-                                        id="summarySubtotal">$0.00</strong></div>
-                        <div class="summary-row"><span>Delivery</span><strong id="summaryDelivery">$0.00</strong></div>
-                        <div class="summary-row savings" id="promoRow" hidden><span>Promo
-                                        (<span id="promoCodeName" class="promo-name"></span>) <button
-                                                id="removePromoBtn" class="text-button"
-                                                style="color:var(--red); font-size:0.65rem; padding:0; margin-left:0.25rem;">Remove</button></span><strong
-                                        id="summaryPromo" class="promo-amount">-$0.00</strong></div>
-                        <div class="summary-row savings"><span>You save</span><strong id="summarySavings">$0.00</strong>
+                                        id="summaryListTotal">$0.00</strong></div>
+                        <div class="summary-row"><span>Subtotal</span><strong id="summarySubtotal">$0.00</strong></div>
+                        <div class="savings-breakdown">
+                                <p style="font-size:0.72rem;color:#667085;margin:0.75rem 0 0.25rem;font-weight:600;letter-spacing:.02em;">
+                                        Savings breakdown</p>
+                                <div class="summary-row savings" id="markdownRow" hidden><span
+                                                id="markdownLabel">Markdown</span><strong id="markdownAmt">-$0.00</strong>
+                                </div>
+                                <div class="summary-row savings" id="promoRow" hidden><span><span id="promoCodeName"
+                                                        class="promo-name"></span><span id="promoDesc"></span> <button
+                                                        id="removePromoBtn" class="text-button"
+                                                        style="color:var(--red); font-size:0.65rem; padding:0; margin-left:0.25rem;">Remove</button></span><strong
+                                                id="summaryPromo" class="promo-amount">-$0.00</strong></div>
                         </div>
+                        <div class="summary-row savings"><span>Total savings</span><strong id="summarySavings"
+                                        style="font-weight:700">$0.00</strong>
+                        </div>
+                        <div class="summary-row"><span>Shipping</span><strong id="summaryDelivery">$0.00</strong></div>
 
                         <div class="summary-row total"><span>Order total</span><strong id="summaryTotal">$0.00</strong>
                         </div>
