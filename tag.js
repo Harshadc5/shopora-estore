@@ -2880,7 +2880,11 @@
                                 }
                                 pushEvent("promo_code_applied", promoData);
                             }
+                            // Re-capture the full payload now that the cart reflects
+                            // the promo — the initial page-load payload predates this.
+                            waitForIdle(onIdleReady);
                         }, 500);
+
                     }
                     return; // Stop here so no other generic rules catch this click
                 }
