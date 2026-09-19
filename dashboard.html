@@ -589,7 +589,7 @@
       <span class="status-pill" id="statusPill"><span class="status-dot"></span><span
           id="statusText">Connecting…</span></span>
       <button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle dark mode"
-        title="Toggle dark mode">🌙</button>
+        title="Toggle dark mode">&#9790;</button>
     </div>
   </header>
 
@@ -1014,7 +1014,7 @@
         return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
       }
       function syncThemeIcon() {
-        if (themeToggle) themeToggle.textContent = currentlyDark() ? '☀️' : '🌙';
+        if (themeToggle) themeToggle.innerHTML = currentlyDark() ? '&#9728;' : '&#9790;';
       }
       if (themeToggle) {
         themeToggle.addEventListener('click', () => {
