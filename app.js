@@ -358,15 +358,16 @@ function renderCart() {
   // Markdown line — real per-item markdown, aggregated across the cart.
   const markdownRow = document.querySelector('#markdownRow');
   if (markdownRow) {
-    markdownRow.dataset.discountType = 'markdown';
     if (savings > 0) {
       markdownRow.style.display = 'flex';
+      markdownRow.dataset.discountType = 'markdown';
       const markedDownItems = items.filter((item) => item.oldPrice > item.price);
       const pcts = [...new Set(markedDownItems.map(discount))];
       document.querySelector('#markdownLabel').textContent = pcts.length === 1 ? `Markdown (${pcts[0]}% off original)` : 'Markdown';
       document.querySelector('#markdownAmt').textContent = '-' + money(savings);
     } else {
       markdownRow.style.display = 'none';
+      delete markdownRow.dataset.discountType;
     }
   }
 
@@ -376,9 +377,9 @@ function renderCart() {
   // the convention demo_router.js's applyPromoOverride already established.
   const promoFieldWrap = document.querySelector('#promoInput') && document.querySelector('#promoInput').parentElement;
   if (promoRow) {
-    promoRow.dataset.discountType = 'code';
     if (activePromo && promoDiscount > 0) {
       promoRow.style.display = 'flex';
+      promoRow.dataset.discountType = 'code';
       document.querySelector('#promoCodeName').textContent = activePromo;
       const promo = PROMO_CODES[activePromo];
       const promoDescEl = document.querySelector('#promoDesc');
@@ -392,6 +393,7 @@ function renderCart() {
       }
     } else {
       promoRow.style.display = 'none';
+      delete promoRow.dataset.discountType;
       if (promoFieldWrap) promoFieldWrap.removeAttribute('data-applied-code');
     }
   }
@@ -408,7 +410,6 @@ function renderCart() {
       _cartPlusRow = document.createElement('div');
       _cartPlusRow.id = 'plusMemberRow';
       _cartPlusRow.className = 'summary-row savings';
-      _cartPlusRow.dataset.discountType = 'loyalty';
       _cartPlusRow.innerHTML = '<span>Shopora Plus member <strong style="font-size:0.72rem;background:#f5c518;color:#000;padding:1px 5px;border-radius:50px;">5% off</strong></span><strong id="plusMemberAmt"></strong>';
       var _breakdown = document.querySelector('.savings-breakdown');
       if (_breakdown) _breakdown.appendChild(_cartPlusRow);
@@ -416,8 +417,12 @@ function renderCart() {
     var _pAmt = document.querySelector('#plusMemberAmt');
     if (_pAmt) _pAmt.textContent = '-' + money(_cartPlusDisc);
     _cartPlusRow.style.display = 'flex';
+    _cartPlusRow.dataset.discountType = 'loyalty';
   } else {
-    if (_cartPlusRow) _cartPlusRow.style.display = 'none';
+    if (_cartPlusRow) {
+      _cartPlusRow.style.display = 'none';
+      delete _cartPlusRow.dataset.discountType;
+    }
   }
 
   document.querySelector('#summaryTotal').textContent = money(actualTotal);
