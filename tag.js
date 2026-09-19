@@ -1524,10 +1524,17 @@
             if (discountConstructEls.length > 0) {
                 result.applied_discount_constructs = [];
                 for (var k = 0; k < discountConstructEls.length; k++) {
-                    var constructText = discountConstructEls[k].innerText.trim();
+                    // Strip any interactive controls (e.g. the promo row's
+                    // "Remove" button) before reading text — a discount
+                    // label shouldn't absorb an action button's own label.
+                    var constructClone = discountConstructEls[k].cloneNode(true);
+                    var innerButtons = constructClone.querySelectorAll('button');
+                    for (var bi = 0; bi < innerButtons.length; bi++) innerButtons[bi].remove();
+                    var constructText = constructClone.innerText.trim();
                     if (constructText) result.applied_discount_constructs.push(constructText);
                 }
             }
+
 
             result.checkout_reachable = !!doc.querySelector('#checkoutButton');
             result.shipping_bar_shown = !!(shippingBar && shippingBar.textContent.trim());
