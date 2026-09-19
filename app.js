@@ -358,6 +358,7 @@ function renderCart() {
   // Markdown line — real per-item markdown, aggregated across the cart.
   const markdownRow = document.querySelector('#markdownRow');
   if (markdownRow) {
+    markdownRow.dataset.discountType = 'markdown';
     if (savings > 0) {
       markdownRow.style.display = 'flex';
       const markedDownItems = items.filter((item) => item.oldPrice > item.price);
@@ -370,7 +371,12 @@ function renderCart() {
   }
 
   const promoRow = document.querySelector('#promoRow');
+  // data-applied-code lives on the promo field's own wrapper, not the row —
+  // tag.js reads it via promoInput.closest('[data-applied-code]'), mirroring
+  // the convention demo_router.js's applyPromoOverride already established.
+  const promoFieldWrap = document.querySelector('#promoInput') && document.querySelector('#promoInput').parentElement;
   if (promoRow) {
+    promoRow.dataset.discountType = 'code';
     if (activePromo && promoDiscount > 0) {
       promoRow.style.display = 'flex';
       document.querySelector('#promoCodeName').textContent = activePromo;
@@ -378,6 +384,7 @@ function renderCart() {
       const promoDescEl = document.querySelector('#promoDesc');
       if (promoDescEl) promoDescEl.textContent = promo ? (promo.type === 'percent' ? ` code (${promo.value}% off)` : ` code (${money(promo.value)} off)`) : ' code';
       document.querySelector('#summaryPromo').textContent = '-' + money(promoDiscount);
+      if (promoFieldWrap) promoFieldWrap.setAttribute('data-applied-code', activePromo);
       const removeBtn = document.querySelector('#removePromoBtn');
       if (removeBtn && !removeBtn.hasAttribute('data-bound')) {
         removeBtn.setAttribute('data-bound', 'true');
@@ -385,6 +392,7 @@ function renderCart() {
       }
     } else {
       promoRow.style.display = 'none';
+      if (promoFieldWrap) promoFieldWrap.removeAttribute('data-applied-code');
     }
   }
 
@@ -400,6 +408,7 @@ function renderCart() {
       _cartPlusRow = document.createElement('div');
       _cartPlusRow.id = 'plusMemberRow';
       _cartPlusRow.className = 'summary-row savings';
+      _cartPlusRow.dataset.discountType = 'loyalty';
       _cartPlusRow.innerHTML = '<span>Shopora Plus member <strong style="font-size:0.72rem;background:#f5c518;color:#000;padding:1px 5px;border-radius:50px;">5% off</strong></span><strong id="plusMemberAmt"></strong>';
       var _breakdown = document.querySelector('.savings-breakdown');
       if (_breakdown) _breakdown.appendChild(_cartPlusRow);
@@ -446,7 +455,7 @@ function renderCart() {
     }, 0);
     return;
   }
-  container.innerHTML = items.map((item) => `<article class="cart-item" data-cart-id="${item.id}" data-item-id="${item.id}" data-sku="${item.id}"><div class="product-image" style="cursor:pointer"></div><div><span class="section-kicker">${item.badge}</span><h3 style="cursor:pointer">${item.name}</h3><p class="cart-item-meta">${item.description}</p><p class="cart-item-meta"><b>In stock</b> · FREE returns</p><div class="cart-item-actions"><div class="quantity-control"><button data-dec aria-label="Decrease quantity">−</button><span>${item.quantity}</span><button data-inc aria-label="Increase quantity">+</button></div><button class="text-button" data-save>Save for later</button><button class="text-button" data-remove>Remove</button></div></div><div class="cart-item-price"><strong class="cart-item-total">${money(retailPrice(item) * item.quantity)}</strong><del>${money(retailOldPrice(item) * item.quantity)}</del><small>${discount(item)}% off</small></div></article>`).join('');
+  container.innerHTML = items.map((item) => `<article class="cart-item" data-cart-id="${item.id}" data-item-id="${item.id}" data-sku="${item.id}"><div class="product-image" style="cursor:pointer"></div><div><span class="section-kicker">${item.badge}</span><h3 style="cursor:pointer">${item.name}</h3><p class="cart-item-meta">${item.description}</p><p class="cart-item-meta" data-availability-flag><b>In stock</b> · FREE returns</p><div class="cart-item-actions"><div class="quantity-control"><button data-dec aria-label="Decrease quantity">−</button><span>${item.quantity}</span><button data-inc aria-label="Increase quantity">+</button></div><button class="text-button" data-save>Save for later</button><button class="text-button" data-remove>Remove</button></div></div><div class="cart-item-price"><strong class="cart-item-total">${money(retailPrice(item) * item.quantity)}</strong><del>${money(retailOldPrice(item) * item.quantity)}</del><small>${discount(item)}% off</small></div></article>`).join('');
   items.forEach((item) => {
     const row = container.querySelector('[data-cart-id="' + item.id + '"]');
     applyVisual(row.querySelector('.product-image'), item);

@@ -665,7 +665,8 @@
             unitPrice: ['.unit-price', '.price-per-unit', '[data-unit-price]', '.price-measurement'],
             generalBadges: ['.badge', '.flag', '.product-label', '.scarcity-msg', '[data-automation-id="productBadge"]'],
             discountAmount: ['.discount-amount', '.savings-amount', '[class*="save"]', '.sui-text-success', '.price-stack span'],
-            availability: ['.availability-msg', '.stock-msg', '.sold-out', '[data-availability]'],
+            availability: ['.availability-msg', '.stock-msg', '.sold-out', '[data-availability]', '[data-availability-flag]'],
+
 
 
 
