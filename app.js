@@ -232,7 +232,8 @@ function renderHome() {
   const dealStrip = document.querySelector('#dealStrip');
   products.filter((product) => product.deal).slice(0, 4).forEach((product) => dealStrip.appendChild(createDealCard(product)));
   const featuredGrid = document.querySelector('#featuredGrid');
-  [products[1], products[2], products[16], products[17], products[30], products[33], products[35], products[38]].forEach((product) => featuredGrid.appendChild(buildProductCard(product, template)));
+  // Laptop Pro, Earbuds Pro, Smartwatch, Soundbar, Wireless Headphones
+  ['el-1', 'el-3', 'el-4', 'el-8', 'el-2'].map((id) => products.find((product) => product.id === id)).filter(Boolean).forEach((product) => featuredGrid.appendChild(buildProductCard(product, template)));
   startDealTimer();
 }
 function startDealTimer() {
