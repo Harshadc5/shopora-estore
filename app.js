@@ -13,7 +13,7 @@ const DELIVERY_FEE = 5;
 const PROMO_CODES = {
   'WELCOME10': { type: 'percent', value: 10 },
   'SAVE20': { type: 'percent', value: 20 },
-  'SAVE50': { type: 'flat', value: 50, min_order: 200 },
+  'SAVE50': { type: 'flat', value: 30, min_order: 200 },
   'MEMBER5': { type: 'percent', value: 5 }
 };
 
@@ -84,6 +84,9 @@ function cartItems() { const fullIds = fullPriceIds(); return Object.entries(car
 function cartSubtotal() { return cartItems().reduce((sum, item) => sum + retailPrice(item) * item.quantity, 0); }
 function cartSavings() { return cartItems().reduce((sum, item) => sum + (retailOldPrice(item) - retailPrice(item)) * item.quantity, 0); }
 function deliveryFor(subtotal) { return subtotal > 0 && subtotal < FREE_DELIVERY_MIN ? DELIVERY_FEE : 0; }
+const OVERSIZED_FEE = 9.99;
+// Checkout-only surcharge for bulky items (product.oversized), charged even above the free-delivery threshold.
+function oversizedFeeFor(items) { return items.some((item) => item.oversized) ? OVERSIZED_FEE : 0; }
 
 function saveCart() {
   localStorage.setItem(CART_KEY, JSON.stringify(cart));
@@ -169,6 +172,20 @@ function buildProductCard(product, template) {
   card.dataset.sponsored = 'false';
   card.dataset.availability = product.availability || 'in-stock';
   card.querySelector('.discount-badge').textContent = discount(product) + '% OFF';
+  if (product.bogo) {
+    // "Buy One Get One Free" badge, grouped with the discount badge (same markup the BOGO demo scenario uses).
+    card.dataset.bogo = 'true';
+    const discountBadge = card.querySelector('.discount-badge');
+    const wrapper = document.createElement('span');
+    wrapper.style.cssText = 'display:flex;align-items:center;gap:0.4rem;';
+    const label = document.createElement('span');
+    label.className = 'product-label';
+    label.textContent = 'BOGO: Buy One Get One Free';
+    label.style.cssText = 'background:#e8f5e9;color:#1b5e20;font-size:0.6rem;font-weight:700;text-transform:uppercase;letter-spacing:0.02em;padding:2px 6px;border-radius:4px;';
+    discountBadge.parentNode.insertBefore(wrapper, discountBadge);
+    wrapper.appendChild(label);
+    wrapper.appendChild(discountBadge);
+  }
   card.querySelector('.product-brand').textContent = product.name.split(' ')[0];
   card.querySelector('h3').textContent = product.name;
   card.querySelector('.stars').textContent = product.rating.toFixed(1) + ' ★';
@@ -494,7 +511,7 @@ function renderCart() {
     }, 0);
     return;
   }
-  container.innerHTML = items.map((item) => `<article class="cart-item" data-cart-id="${item.id}" data-item-id="${item.id}" data-sku="${item.id}"><div class="product-image" style="cursor:pointer"></div><div><span class="section-kicker">${item.badge}</span><h3 style="cursor:pointer">${item.name}</h3><p class="cart-item-meta">${item.description}</p><p class="cart-item-meta" data-availability-flag><b>In stock</b> · FREE returns</p><div class="cart-item-actions"><div class="quantity-control"><button data-dec aria-label="Decrease quantity">−</button><span>${item.quantity}</span><button data-inc aria-label="Increase quantity">+</button></div><button class="text-button" data-save>Save for later</button><button class="text-button" data-remove>Remove</button></div></div><div class="cart-item-price"><strong class="cart-item-total">${money(retailPrice(item) * item.quantity)}</strong><del>${money(retailOldPrice(item) * item.quantity)}</del><small>${discount(item)}% off</small></div></article>`).join('');
+  container.innerHTML = items.map((item) => `<article class="cart-item" data-cart-id="${item.id}" data-item-id="${item.id}" data-sku="${item.id}"><div class="product-image" style="cursor:pointer"></div><div><span class="section-kicker">${item.badge}</span><h3 style="cursor:pointer">${item.name}</h3><p class="cart-item-meta">${item.description}</p><p class="cart-item-meta" data-availability-flag><b>In stock</b> · FREE returns</p>${item.bogo ? '<p class="cart-item-meta cart-item-note" style="color:#b45309;">BOGO not applicable to sale items.</p>' : ''}<div class="cart-item-actions"><div class="quantity-control"><button data-dec aria-label="Decrease quantity">−</button><span>${item.quantity}</span><button data-inc aria-label="Increase quantity">+</button></div><button class="text-button" data-save>Save for later</button><button class="text-button" data-remove>Remove</button></div></div><div class="cart-item-price"><strong class="cart-item-total">${money(retailPrice(item) * item.quantity)}</strong><del>${money(retailOldPrice(item) * item.quantity)}</del><small>${discount(item)}% off</small></div></article>`).join('');
   items.forEach((item) => {
     const row = container.querySelector('[data-cart-id="' + item.id + '"]');
     applyVisual(row.querySelector('.product-image'), item);
@@ -514,7 +531,7 @@ function renderRecommendations() {
 function renderCheckout() {
   const container = document.querySelector('#checkoutItems'), form = document.querySelector('#checkoutForm'); if (!container || !form) return;
   const update = () => {
-    const items = cartItems(), subtotal = cartSubtotal(), delivery = deliveryFor(subtotal);
+    const items = cartItems(), subtotal = cartSubtotal(), oversizedFee = oversizedFeeFor(items), delivery = deliveryFor(subtotal) + oversizedFee;
     // Same summary layout as the cart: Items and Subtotal at list price, then a
     // savings breakdown (markdown / code / Plus), a Total savings line, delivery
     // and the total.
@@ -526,6 +543,8 @@ function renderCheckout() {
     document.querySelector('#checkoutListTotal').textContent = money(listSubtotal);
     document.querySelector('#checkoutSubtotal').textContent = money(listSubtotal);
     document.querySelector('#checkoutDelivery').textContent = delivery ? money(delivery) : 'FREE';
+    const checkoutDeliveryLabel = document.querySelector('#checkoutDelivery').closest('.summary-row').querySelector('span');
+    if (checkoutDeliveryLabel) checkoutDeliveryLabel.textContent = oversizedFee ? 'Oversized shipping fee' : 'Delivery';
 
     // Markdown line — real per-item markdown, aggregated across the cart.
     const markdownRow = document.querySelector('#checkoutMarkdownRow');
