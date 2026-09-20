@@ -396,7 +396,7 @@ function renderCatalog() {
 function renderCart() {
   const container = document.querySelector('#cartItems');
   if (!container) return;
-  const items = cartItems(), subtotal = cartSubtotal(), delivery = deliveryFor(subtotal), savings = cartSavings();
+  const items = cartItems(), subtotal = cartSubtotal(), oversizedFee = oversizedFeeFor(items), delivery = deliveryFor(subtotal) + oversizedFee, savings = cartSavings();
   const listSubtotal = items.reduce((sum, item) => sum + retailOldPrice(item) * item.quantity, 0);
   const promoDiscount = calculatePromoDiscount(subtotal, delivery);
   const finalTotal = subtotal + delivery - promoDiscount;
@@ -404,6 +404,8 @@ function renderCart() {
   document.querySelector('#summaryListTotal').textContent = money(listSubtotal);
   document.querySelector('#summarySubtotal').textContent = money(listSubtotal);
   document.querySelector('#summaryDelivery').textContent = delivery ? money(delivery) : 'FREE';
+  const summaryDeliveryLabel = document.querySelector('#summaryDelivery').closest('.summary-row').querySelector('span');
+  if (summaryDeliveryLabel) summaryDeliveryLabel.textContent = oversizedFee ? 'Oversized shipping fee' : 'Shipping';
 
   // Markdown line — real per-item markdown, aggregated across the cart.
   const markdownRow = document.querySelector('#markdownRow');
