@@ -1,6 +1,7 @@
 import { products, categories } from './data/products.js';
 
 const CART_KEY = 'shopora-cart-v2';
+const FULL_PRICE_KEY = 'shopora-fullprice-v1';
 const WISHLIST_KEY = 'shopora-wishlist';
 const PROMO_KEY = 'shopora-promo';
 const USD_RATE = 1;
@@ -75,7 +76,11 @@ function money(value) { return new Intl.NumberFormat('en-US', { style: 'currency
 function discount(product) { return Math.round(((product.oldPrice - product.price) / product.oldPrice) * 100); }
 function ratingCount(product) { return 120 + [...product.id].reduce((sum, char) => sum + char.charCodeAt(0), 0) * 9; }
 function cartCount() { return Object.values(cart).reduce((sum, quantity) => sum + quantity, 0); }
-function cartItems() { return Object.entries(cart).map(([id, quantity]) => { const product = products.find((item) => item.id === id); return product ? { ...product, quantity } : null; }).filter(Boolean); }
+// Ids added from the homepage "Deal of the day" card are priced at the regular
+// (pre-markdown) price; adding the same product from anywhere else uses its markdown price.
+function fullPriceIds() { try { return new Set(JSON.parse(localStorage.getItem(FULL_PRICE_KEY) || '[]')); } catch (e) { return new Set(); } }
+function setFullPrice(id, on) { const ids = fullPriceIds(); if (on) ids.add(id); else ids.delete(id); try { localStorage.setItem(FULL_PRICE_KEY, JSON.stringify([...ids])); } catch (e) { /* ignore */ } }
+function cartItems() { const fullIds = fullPriceIds(); return Object.entries(cart).map(([id, quantity]) => { const product = products.find((item) => item.id === id); if (!product) return null; return fullIds.has(id) ? { ...product, price: product.oldPrice, quantity } : { ...product, quantity }; }).filter(Boolean); }
 function cartSubtotal() { return cartItems().reduce((sum, item) => sum + retailPrice(item) * item.quantity, 0); }
 function cartSavings() { return cartItems().reduce((sum, item) => sum + (retailOldPrice(item) - retailPrice(item)) * item.quantity, 0); }
 function deliveryFor(subtotal) { return subtotal > 0 && subtotal < FREE_DELIVERY_MIN ? DELIVERY_FEE : 0; }
@@ -85,6 +90,7 @@ function saveCart() {
   // An empty cart has nothing left for a promo to discount — carrying one
   // over into whatever gets added next is exactly the stale-state confusion
   // this is meant to prevent.
+  if (Object.keys(cart).length === 0) { try { localStorage.removeItem(FULL_PRICE_KEY); } catch (e) { /* ignore */ } }
   if (Object.keys(cart).length === 0 && activePromo) {
     activePromo = null;
     sessionStorage.removeItem(PROMO_KEY);
@@ -95,6 +101,7 @@ function saveWishlist() { localStorage.setItem(WISHLIST_KEY, JSON.stringify([...
 function addToCart(id, quantity = 1) {
   const product = products.find((item) => item.id === id);
   if (!product) return;
+  setFullPrice(id, !!(arguments[2] && arguments[2].fullPrice));
   const next = Math.min(product.stock, (cart[id] || 0) + quantity);
   cart[id] = next;
   saveCart();
@@ -222,11 +229,17 @@ function createDealCard(product) {
 function renderHome() {
   const template = document.querySelector('#productCardTemplate');
   if (!template) return;
-  const heroDeal = products.find((product) => product.deal) || products[0];
+  // The first one product which has deal:true
+  //const heroDeal = products.find((product) => product.deal) || products[0];
+  //The poistion deal product (w.r.t product.js):  
+  //const heroDeal = products.filter((product) => product.deal)[0] || products[0];
+  //A specific product(by id):
+  const heroDeal = products.find((product) => product.id === 'ho-5') || products[0];
   document.querySelector('#heroDealName').textContent = heroDeal.name;
-  document.querySelector('#heroDealPrice').textContent = money(retailPrice(heroDeal));
-  document.querySelector('#heroDealOld').textContent = money(retailOldPrice(heroDeal));
-  document.querySelector('#heroDealAdd').addEventListener('click', () => addToCart(heroDeal.id));
+  // Hero "Deal of the day" card shows the regular (pre-markdown) price only — no offer, no strikethrough.
+  document.querySelector('#heroDealPrice').textContent = money(retailOldPrice(heroDeal));
+  document.querySelector('#heroDealOld').textContent = '';
+  document.querySelector('#heroDealAdd').addEventListener('click', () => addToCart(heroDeal.id, 1, { fullPrice: true }));
   const categoryGrid = document.querySelector('#categoryGrid');
   categoryGrid.innerHTML = categories.map((category) => `<a class="category-card ${category.key}" href="./category.html?category=${category.key}"><span>15 PRODUCTS</span><strong>${category.label}</strong><p>${category.description}</p></a>`).join('');
   const dealStrip = document.querySelector('#dealStrip');
@@ -321,6 +334,25 @@ function renderCatalog() {
       headingText = `Search results for "${search.value.trim()}"`;
     }
     document.querySelector('#resultsHeading').textContent = headingText;
+
+    const saleBanner = document.querySelector('#categorySaleBanner');
+    if (saleBanner) {
+      const showSaleBanner = activeCategory === 'electronics' && !term && !dealOnly && !new URLSearchParams(location.search).has('demo');
+      saleBanner.hidden = !showSaleBanner;
+      saleBanner.style.display = showSaleBanner ? 'flex' : 'none';
+      const saleThumbs = saleBanner.querySelector('#categorySaleThumbs');
+      if (showSaleBanner && saleThumbs && !saleThumbs.childElementCount) {
+        saleThumbs.innerHTML = ['el-1', 'el-2', 'el-8'].map((sku, i) => {
+          const product = products.find((p) => p.id === sku);
+          if (!product) return '';
+          const spriteIndex = Math.max(0, Number(product.id.split('-')[1]) - 1);
+          const size = i % 2 === 0 ? 72 : 58;
+          return `<div class="product-image sprite-${product.category}" style="--sprite-x:${(spriteIndex % 5) * 25}%;--sprite-y:${Math.floor(spriteIndex / 5) * 50}%;width:${size}px;height:${size}px;border-radius:50%;background-color:#fff;box-shadow:0 6px 14px rgba(0,0,0,0.35);flex-shrink:0;margin-left:${i === 0 ? 0 : -14}px;"></div>`;
+        }).join('');
+      }
+      const saleToolbar = document.querySelector('.results-toolbar');
+      if (showSaleBanner && saleToolbar) saleBanner.style.width = saleToolbar.getBoundingClientRect().width + 'px';
+    }
 
     const subheadingText = activeCategory === 'all'
       ? 'Quality picks across electronics, fashion, home and books.'

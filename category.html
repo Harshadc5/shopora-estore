@@ -53,7 +53,14 @@
                         <div><span class="section-kicker">SHOPORA CATALOG</span>
                                 <h1 id="resultsHeading">Find your next favourite</h1>
                                 <p id="resultsSubheading">Quality picks across electronics, fashion, home and books.</p>
-                        </div><button class="filter-toggle button" id="filterToggle" type="button">Filters &
+                        </div><a class="promo-banner promo-tech" id="categorySaleBanner" hidden data-module-type="banner"
+                                data-claim-type="percentage" data-claim-percent="50" data-claim-scope="electronics"
+                                href="./category.html?category=electronics"
+                                style="display:none;flex-direction:row;align-items:center;justify-content:space-between;flex:0 0 auto;align-self:center;box-sizing:border-box;margin:0 1.5rem;min-height:110px;padding:1rem 1.5rem;overflow:hidden;"><div
+                                        style="flex:0 1 auto;min-width:0;"><span style="font-size:0.65rem;">ELECTRONICS SALE</span>
+                                        <h2 style="font-size:1.5rem;">SAVE UP TO 50% ON ELECTRONICS!</h2><b style="font-size:0.8rem;">Limited time — shop now →</b></div>
+                                <div id="categorySaleThumbs" style="flex:0 0 auto;display:flex;align-items:center;padding-left:1rem;"></div></a>
+                        <button class="filter-toggle button" id="filterToggle" type="button">Filters &
                                 sort</button>
                 </div>
                 <div class="catalog-layout">
@@ -116,7 +123,7 @@
         </template>
         <div id="toastRegion" class="toast-region" aria-live="polite"></div>
         <div id="quickViewModal" class="modal" hidden></div>
-        <script type="module" src="./app.js?v=24"></script>
+        <script type="module" src="./app.js?v=30"></script>
         <script type="module" src="./demo_router.js?v=56"></script>
         <!-- AIORA JS Tag — coordination failure signal collector -->
         <script src="tag.js" data-client-id="shopora-prod" data-endpoint="/api/collect"

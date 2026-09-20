@@ -42,7 +42,7 @@
         aria-expanded="false">☰ All</button><a href="./category.html?category=electronics">Mobiles & Electronics</a><a
         href="./category.html?category=fashion">Fashion</a><a href="./category.html?category=home">Home & Kitchen</a><a
         href="./category.html?category=books">Books</a><a href="#best-deals">Today's Deals</a><a
-        href="#services">Customer Service</a><span class="rail-offer" data-claim-scope="plus_members">Shopora Plus:
+        href="#services">Customer Service</a><span class="rail-offer" data-claim-percent="5" data-claim-scope="plus_members">Shopora Plus:
         extra 5% off</span></div>
   </header>
   <main id="mainContent">
@@ -60,7 +60,10 @@
         <div class="hero-proof"><span>✓ Verified products</span><span>✓ Secure checkout</span><span>✓ No hidden
             fees</span></div>
       </div>
-      <div class="hero-deal-card"><span class="deal-chip">Deal of the day</span>
+      <div class="hero-deal-card"><div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;"><span class="deal-chip">Deal of the day</span>
+        <div class="countdown" data-deadline-timestamp="2026-08-30T00:00:00Z"
+          style="display:inline-block;margin:0;padding:0.4rem 0.8rem;border-radius:999px;font-size:0.85rem;font-weight:400;">Ends in <strong id="dealTimer"
+            class="countdown-value" style="font-size:0.85rem;font-weight:700;display:inline;">09:42:18</strong></div></div>
         <p id="heroDealName">Loading…</p>
         <div><strong id="heroDealPrice"></strong><del id="heroDealOld"></del></div><button class="button button-primary"
           id="heroDealAdd">Add to cart</button>
@@ -101,8 +104,6 @@
         <div><span class="section-kicker">Limited-time prices</span>
           <h2>Today's best deals</h2>
         </div>
-        <div class="countdown" data-deadline-timestamp="2026-08-30T00:00:00Z">Ends in <strong id="dealTimer"
-            class="countdown-value">09:42:18</strong></div>
       </div>
       <div class="deal-strip" id="dealStrip"></div>
     </section>
@@ -112,10 +113,10 @@
       </a><a class="promo-banner promo-home" href="./category.html?category=home"><span>HOME REFRESH</span>
         <h2>Give every room<br />a fresh new feel.</h2><b>Shop home →</b>
       </a></section>
-    <section class="newsletter">
+    <section class="newsletter" data-claim-type="percentage" data-claim-percent="20" data-claim-scope="members">
       <div><span class="section-kicker">SHOPORA INSIDER</span>
         <h2>Deals worth opening your inbox for.</h2>
-        <p>Get weekly price drops, new arrivals and member-only offers.</p>
+        <p>Get weekly price drops, new arrivals and member-only 20% off deals.</p>
       </div>
       <form id="newsletterForm"><label class="sr-only" for="newsletterEmail">Email address</label><input
           id="newsletterEmail" type="email" required placeholder="Enter your email address" /><button
@@ -156,7 +157,7 @@
   </template>
   <div id="toastRegion" class="toast-region" aria-live="polite"></div>
   <div id="quickViewModal" class="modal" hidden></div>
-  <script type="module" src="./app.js?v=25"></script>
+  <script type="module" src="./app.js?v=30"></script>
   <script type="module" src="./demo_router.js?v=56"></script>
   <!-- AIORA JS Tag — coordination failure signal collector -->
   <script src="tag.js" data-client-id="shopora-prod" data-endpoint="/api/collect" data-sampling-rate="1.0"
