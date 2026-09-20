@@ -6,7 +6,7 @@ import { products } from './data/products.js';
 // versioned separately from this file's own <script> tag ?v= — bump this
 // whenever demo_scenarios.js content changes, so edits can't get stuck
 // behind a stale cached copy.
-import { demoScenarios } from './data/demo_scenarios.js?v=34';
+import { demoScenarios } from './data/demo_scenarios.js?v=35';
 
 function money(n) {
     return '$' + Number(n).toFixed(2);

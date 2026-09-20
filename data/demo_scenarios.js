@@ -208,7 +208,7 @@ export const demoScenarios = {
             "claim_scope": "electronics"
         },
         "featuredTiles": ["el-1", "el-3", "el-4", "el-8", "el-2"],
-        "featuredSectionHeading": "Big Savings Day Offered- Products",
+        "featuredSectionHeading": "Big Savings Day - UP TO 35% OFF",
         "hideSections": [".category-section", "#best-deals", ".promo-banner.promo-tech", ".promo-banner.promo-home"]
     },
     // 2.1.b: same hero-vs-tiles claim-mismatch story as 2.1, but with a
@@ -225,7 +225,7 @@ export const demoScenarios = {
             "claim_min_spend": 500
         },
         "featuredTiles": ["el-3", "el-8", "el-1", "el-4", "el-7", "el-2"],
-        "featuredSectionHeading": "Big Savings Day Offered- Products",
+        "featuredSectionHeading": "Big Savings Day - UP TO $100 OFF",
         "hideSections": [".category-section", "#best-deals", ".promo-banner.promo-tech", ".promo-banner.promo-home"],
         "tiles": {
             "discountOverrides": [
