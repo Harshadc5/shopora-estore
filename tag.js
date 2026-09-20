@@ -590,10 +590,21 @@
 
 
                 // 8. Third-party program match (Looking for common UTM/affiliate parameters)
+                // Report the attribution itself (utm_* values, affiliate / partner / registry id), not just a flag
                 var programMatch = null;
-                if (window.location.search.includes('utm_') || window.location.search.includes('affiliate')) {
-                    programMatch = 'affiliate_or_campaign_detected';
-                }
+                var attributionParts = [];
+                try {
+                    new URLSearchParams(window.location.search).forEach(function (val, key) {
+                        var lowerKey = key.toLowerCase();
+                        // Skip anything that looks like an email address
+                        if (!val || val.indexOf('@') !== -1) return;
+                        if (!/^utm_|affiliate|^aff_?id$|^partner_?id$|registry_?id/.test(lowerKey)) return;
+                        // Same PII keys that page_url_path strips
+                        if (/email|token|auth|password|session|uid|key|mobile|phone|contact|number/.test(lowerKey)) return;
+                        attributionParts.push(lowerKey + '=' + val.slice(0, 40));
+                    });
+                } catch (e) { }
+                if (attributionParts.length) programMatch = attributionParts.slice(0, 5).join('&');
 
                 // ---NEW---(add) w.r.t Canonical Signal Schema
                 // 9. Visible Query
@@ -2217,6 +2228,20 @@
             } catch (e) { return null; }
         }
         //  10.5  TIER 5 - CUSTOMER / LOYALTY STATE 
+        // Where an identity state was detected. A retailer-supplied
+        // data-component wins; otherwise infer it from the element.
+        // Returns null when nothing is recognisable so callers keep their default.
+        function classifyIdentityComponent(el) {
+            var explicit = el.getAttribute('data-component');
+            if (explicit) return explicit;
+            if (el.closest('.account-drawer, .drawer, [data-drawer]')) return 'drawer';
+            if (el.closest('.price-overlay, [data-price-overlay], .member-price')) return 'price_overlay';
+            if (el.matches('.loyalty-prompt, .login-prompt, .signin-prompt, [data-prompt]')) return 'prompt';
+            if (el.closest('header, .site-header, .account-nav, #header-account')) return 'header_chip';
+            if (el.matches('.account-greeting, .user-greeting')) return 'greeting';
+            return null;
+        }
+
         function extractTier5(doc) {
             try {
                 var t5 = {};
@@ -2225,7 +2250,7 @@
                 // We look for a greeting message or account link in the header/DOM
                 var greetingEl = doc.querySelector('.account-greeting, #header-account, [data-identity-state], .user-greeting');
                 if (greetingEl) {
-                    t5.component_type = 'header_chip'; // Assuming it's in the header for Shopora
+                    t5.component_type = classifyIdentityComponent(greetingEl) || 'header_chip';
                     var greetingText = greetingEl.textContent.trim().toLowerCase();
 
                     // If the text contains "guest" or "sign in", they are anonymous
@@ -2257,7 +2282,7 @@
                     for (var ie = 0; ie < identityEls.length; ie++) {
                         var ieEl = identityEls[ie];
                         var sig = {
-                            component_type: ieEl.getAttribute('data-component') || (ieEl === greetingEl ? 'header_chip' : 'unknown'),
+                            component_type: classifyIdentityComponent(ieEl) || (ieEl === greetingEl ? 'header_chip' : 'unknown'),
                             state: ieEl.getAttribute('data-identity-state')
                         };
                         var ieTier = ieEl.getAttribute('data-member-tier');
@@ -2387,8 +2412,10 @@
                 if (ctaEl.getAttribute && ctaEl.getAttribute('href')) mod.cta_href = ctaEl.getAttribute('href');
             }
 
-            var sponsoredLabel = el.querySelector('.sponsored-label, .ad-label, [data-sponsored="true"]');
-            if (sponsoredLabel) mod.banner_label = 'sponsored';
+            // Banner-level label: is the banner itself marked sponsored, partner or editorial?
+            if (el.querySelector('.sponsored-label, .ad-label, [data-sponsored="true"]')) mod.banner_label = 'sponsored';
+            else if (el.querySelector('.partner-label, [data-partner="true"]')) mod.banner_label = 'partner';
+            else if (el.querySelector('.editorial-label, [data-editorial="true"]')) mod.banner_label = 'editorial';
 
             var campaignRef = el.getAttribute('data-campaign') || el.getAttribute('data-claim-code');
             if (campaignRef) mod.campaign_ref = campaignRef;
@@ -3404,8 +3431,7 @@
                 pushEvent("purchase_completed", orderData);
                 flushInteractionEvents("page-load");*/
 
-                pushEvent("purchase_completed", readOrderData());
-                flushInteractionEvents("page-load");
+                pushEvent("purchase_completed", readOrderData(), true); // flush now (reason: immediate_navigation)
             }
         }
 
