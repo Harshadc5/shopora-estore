@@ -426,7 +426,8 @@ function renderCart() {
   }
 
   document.querySelector('#summaryTotal').textContent = money(actualTotal);
-  document.querySelector('#summarySavings').textContent = money(listSubtotal - actualTotal);
+  // actualTotal includes delivery, which is a cost, not a saving
+  document.querySelector('#summarySavings').textContent = money(listSubtotal - (actualTotal - delivery));
   document.querySelector('#cartItemLabel').textContent = cartCount() + (cartCount() === 1 ? ' item' : ' items');
 
   const btn = document.querySelector('#applyPromoBtn');
@@ -481,10 +482,33 @@ function renderCheckout() {
   const container = document.querySelector('#checkoutItems'), form = document.querySelector('#checkoutForm'); if (!container || !form) return;
   const update = () => {
     const items = cartItems(), subtotal = cartSubtotal(), delivery = deliveryFor(subtotal);
+    // Same summary layout as the cart: Items and Subtotal at list price, then a
+    // savings breakdown (markdown / code / Plus), a Total savings line, delivery
+    // and the total.
+    const listSubtotal = items.reduce((sum, item) => sum + retailOldPrice(item) * item.quantity, 0);
+    const markdownSavings = cartSavings();
     const promoDiscount = calculatePromoDiscount(subtotal, delivery);
     const finalTotal = subtotal + delivery - promoDiscount;
-    document.querySelector('#checkoutSubtotal').textContent = money(subtotal);
+    document.querySelector('#checkoutItemCount').textContent = String(cartCount());
+    document.querySelector('#checkoutListTotal').textContent = money(listSubtotal);
+    document.querySelector('#checkoutSubtotal').textContent = money(listSubtotal);
     document.querySelector('#checkoutDelivery').textContent = delivery ? money(delivery) : 'FREE';
+
+    // Markdown line — real per-item markdown, aggregated across the cart.
+    const markdownRow = document.querySelector('#checkoutMarkdownRow');
+    if (markdownRow) {
+      if (markdownSavings > 0) {
+        markdownRow.style.display = 'flex';
+        markdownRow.dataset.discountType = 'markdown';
+        const markedDownItems = items.filter((item) => item.oldPrice > item.price);
+        const pcts = [...new Set(markedDownItems.map(discount))];
+        document.querySelector('#checkoutMarkdownLabel').textContent = pcts.length === 1 ? `Markdown (${pcts[0]}% off original)` : 'Markdown';
+        document.querySelector('#checkoutMarkdownAmt').textContent = '-' + money(markdownSavings);
+      } else {
+        markdownRow.style.display = 'none';
+        delete markdownRow.dataset.discountType;
+      }
+    }
 
     const promoRow = document.querySelector('#checkoutPromoRow');
     // Same convention as the cart: data-applied-code sits on the promo
@@ -497,6 +521,9 @@ function renderCheckout() {
         promoRow.style.display = 'flex';
         promoRow.dataset.discountType = 'code';
         document.querySelector('#checkoutPromoName').textContent = activePromo;
+        const coPromo = PROMO_CODES[activePromo];
+        const coPromoDescEl = document.querySelector('#checkoutPromoDesc');
+        if (coPromoDescEl) coPromoDescEl.textContent = coPromo ? (coPromo.type === 'percent' ? ` code (${coPromo.value}% off)` : ` code (${money(coPromo.value)} off)`) : ' code';
         document.querySelector('#checkoutPromo').textContent = '-' + money(promoDiscount);
         if (coPromoWrap) coPromoWrap.setAttribute('data-applied-code', activePromo);
         const removeBtn = document.querySelector('#removeCheckoutPromoBtn');
@@ -524,8 +551,8 @@ function renderCheckout() {
         _coPlusRow.id = 'coPlusMemberRow';
         _coPlusRow.className = 'summary-row savings';
         _coPlusRow.innerHTML = '<span>Shopora Plus member <strong style="font-size:0.72rem;background:#f5c518;color:#000;padding:1px 5px;border-radius:50px;">5% off</strong></span><strong id="coPlusMemberAmt"></strong>';
-        const _coTotalRow = document.querySelector('#checkoutTotal')?.closest('.summary-row.total');
-        if (_coTotalRow) _coTotalRow.before(_coPlusRow);
+        const _coBreakdown = document.querySelector('.savings-breakdown');
+        if (_coBreakdown) _coBreakdown.appendChild(_coPlusRow);
       }
       document.querySelector('#coPlusMemberAmt').textContent = '-' + money(subtotal * 0.05);
       _coPlusRow.style.display = 'flex';
@@ -537,6 +564,14 @@ function renderCheckout() {
       }
       document.querySelector('#checkoutTotal').textContent = money(finalTotal);
     }
+    // Total savings = markdown + code + Plus (delivery is not a saving)
+    document.querySelector('#checkoutSavings').textContent = money(markdownSavings + promoDiscount + (_coIsPlus ? subtotal * 0.05 : 0));
+    // Nothing to itemise on an empty cart, so the Items and Total savings rows
+    // only show when there is something in it.
+    ['#checkoutItemsRow', '#checkoutSavingsRow'].forEach((sel) => {
+      const rowEl = document.querySelector(sel);
+      if (rowEl) rowEl.style.display = items.length ? 'flex' : 'none';
+    });
 
     const btn = document.querySelector('#applyCheckoutPromoBtn');
     if (btn && !btn.hasAttribute('data-bound')) {

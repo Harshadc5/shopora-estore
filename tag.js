@@ -716,6 +716,7 @@
             checkoutOrderButton: ['#placeOrderButton', '.place-order', '[data-automation-id="checkoutButton"]'],
             checkoutLoyalty: ['#coPlusMemberRow', '[data-automation-id="loyaltyDiscount"]'],
             checkoutPromotions: ['#checkoutPromoRow', '.promo-applied', '[data-automation-id="appliedPromotion"]'],
+            checkoutSavings: ['#checkoutSavings'],
             checkoutItemQuantity: ['small', '[class*="qty"]'],  // <--- ADDED THIS LINE
 
 
@@ -1760,6 +1761,19 @@
                 if (promo.name || promo.amount) checkoutPromotions.push(promo);
             });
             if (checkoutPromotions.length) result.promotions = checkoutPromotions;
+
+            // "Total savings" row — the retailer's own figure. It already covers
+            // markdown, codes and loyalty, so when it is shown it replaces the
+            // promo + loyalty sum above (which would miss the markdown).
+            var checkoutSavingsEl = firstMatch(doc, FIELD_SEL.checkoutSavings);
+            var checkoutSavingsRow = checkoutSavingsEl ? checkoutSavingsEl.closest('.summary-row') : null;
+            var checkoutSavingsHidden = !!(checkoutSavingsRow && checkoutSavingsRow.style && checkoutSavingsRow.style.display === 'none');
+            var checkoutSavingsText = (checkoutSavingsEl && !checkoutSavingsHidden) ? textOf(checkoutSavingsEl, 20) : null;
+            if (checkoutSavingsText) {
+                result.savings_shown = checkoutSavingsText;
+                var parsedCheckoutSavings = parsePrice(checkoutSavingsText);
+                if (parsedCheckoutSavings) result.savings_numeric = parsedCheckoutSavings.amount;
+            }
 
             // Promo field state / applied code — same convention as the cart
             // extractor: [data-promo-state] when a retailer sets it, else the

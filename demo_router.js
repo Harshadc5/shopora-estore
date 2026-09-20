@@ -606,6 +606,15 @@ function renderCheckoutOverride(checkout) {
     const set = (id, text) => { const el = document.querySelector(id); if (el) el.textContent = text; };
     set('#checkoutSubtotal', money(subtotal));
 
+    // app.js's restructured summary (Items / markdown / Total savings) is built
+    // from the REAL cart, which this staged checkout replaces — the scenario
+    // stages no savings, so hide those rows rather than let real-cart values
+    // (or a real markdown construct) sit next to the staged items.
+    ['#checkoutItemsRow', '#checkoutMarkdownRow', '#checkoutSavingsRow'].forEach((sel) => {
+        const rowEl = document.querySelector(sel);
+        if (rowEl) { rowEl.style.display = 'none'; delete rowEl.dataset.discountType; }
+    });
+
     const shippingFee = checkout.shippingFee || 0;
     const deliveryEl = document.querySelector('#checkoutDelivery');
     if (deliveryEl) {
