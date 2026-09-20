@@ -2046,9 +2046,14 @@
                 }*/
                 var hiddenEls = doc.querySelectorAll('.hidden, .d-none, .sr-only, [hidden], [style*="display: none"], [style*="display:none"]');
                 if (hiddenEls.length > 0) {
+                    /*signals.css_hidden_blocks = []; --- if we want name to show without cart haeader for the cart/checkout
+                    // Cap at 5 to protect the 1KB budget!
+                    for (var i = 0; i < Math.min(hiddenEls.length, 5); i++) {*/
                     signals.css_hidden_blocks = [];
+                    var IDENTITY_UI = '[data-identity-state], [data-customer-hash], .account-chip, .account-greeting, #header-account, .user-greeting';
                     // Cap at 5 to protect the 1KB budget!
                     for (var i = 0; i < Math.min(hiddenEls.length, 5); i++) {
+
                         // Skip the real cart/checkout "promo discount" row
                         // (cart's #promoRow, checkout's #checkoutPromoRow) —
                         // it's legitimately hidden by design until a promo
@@ -2056,9 +2061,20 @@
                         // its default empty state ("Promo () Remove-$0.00")
                         // would otherwise show up as noise on every single
                         // cart/checkout capture that has no promo applied.
-                        if (hiddenEls[i].classList && hiddenEls[i].classList.contains('savings')) continue;
+                        /*if (hiddenEls[i].classList && hiddenEls[i].classList.contains('savings')) continue;  --- if we want name to show without cart haeader for the cart/checkout
                         var copy = textOf(hiddenEls[i], 100);
+                        if (copy) {*/
+                        if (hiddenEls[i].classList && hiddenEls[i].classList.contains('savings')) continue;
+                        // Hidden identity UI holds a personal greeting ("Hello, <first
+                        // name>") — never report it. Identity is already captured
+                        // safely via Tier 0 / Tier 5 attributes.
+                        if ((hiddenEls[i].querySelector && hiddenEls[i].querySelector(IDENTITY_UI)) ||
+                            (hiddenEls[i].closest && hiddenEls[i].closest(IDENTITY_UI))) continue;
+                        var copy = textOf(hiddenEls[i], 100);
+                        // Safety net for greetings without identity markup.
+                        if (copy && /^(hello|hi|hey|welcome back)\s*,/i.test(copy)) continue;
                         if (copy) {
+
                             signals.css_hidden_blocks.push({
                                 selector: hiddenEls[i].className || hiddenEls[i].tagName.toLowerCase(),
                                 gated_copy: copy,
@@ -2912,20 +2928,13 @@
                         cartTotals.cart_displayed_total = totalEl.textContent.trim();
                         cartTotals.cart_displayed_currency = extractCurrency(cartTotals.cart_displayed_total);
                     }
-                    // just for local testing
-                    // STOP THE BROWSER FROM NAVIGATING INSTANTLY
-                    e.preventDefault();
-                    e.stopImmediatePropagation();
-
+                    // Flush immediately (sendBeacon survives navigation); the
+                    // page's own handler then navigates as normal.
                     pushEvent("checkout_initiated", cartTotals, true);
-
-                    // just for local testing
-                    // WAIT 100ms TO SEND PAYLOAD, THEN NAVIGATE MANUALLY
-                    var href = isCheckoutBtn.href || './checkout.html';
-                    setTimeout(function () { window.location.href = href; }, 100);
 
                     return;
                 }
+
 
                 // ================================================================
                 // NEW : Priority 1: MATCH: add_to_cart
@@ -3061,20 +3070,11 @@
                         }
                     }
 
-                    // just for local testing
-                    // STOP THE BROWSER FROM NAVIGATING INSTANTLY
-                    e.preventDefault();
-                    e.stopImmediatePropagation();
                     pushEvent("product_card_clicked", cardData, true);
-
-                    // just for local testing
-                    // WAIT 100ms TO SEND PAYLOAD, THEN NAVIGATE MANUALLY
-                    setTimeout(function () {
-                        window.location.href = './pdp.html?id=' + cardData.sku;
-                    }, 100);
 
                     return;
                 }
+
 
                 // ================================================================
                 // NEW : Priority 3 - quick_view_opened
