@@ -683,7 +683,7 @@
             cartLoyalty: ['.loyalty-discount', '[data-automation-id="loyaltyDiscount"]', '#plusMemberRow'],
             // --- NEW TIER 2 ADDITIONS --- w.r.t Canonical Signal Schema
             appliedDiscountConstructs: ['.applied-discount-type', '[data-discount-type]', '.discount-construct'],
-            promoInput: ['input[name*="discount"]', 'input[name*="coupon"]', '#promoCode', '.promo-input', '#promoInput'],
+            promoInput: ['input[name*="discount"]', 'input[name*="coupon"]', '#promoCode', '.promo-input', '#promoInput', '#checkoutPromoInput'],
             altPaymentButtons: ['[data-testid*="apple"]', '.apple-pay', '#applePay', '.paypal-button', '[data-payment-method="google-pay"]', '.alt-payment'],
             promoInlineReason: ['.promo-error', '.discount-error', '.inline-error', '[data-automation-id="promoError"]'],
             loyaltyBalance: ['.loyalty-balance', '.points-balance', '[data-automation-id="loyaltyPointsBalance"]', '[data-loyalty-balance]'],
@@ -704,6 +704,7 @@
             checkoutTax: ['#checkoutTax', '[data-automation-id="salesTaxTotal"]'],
             checkoutOrderButton: ['#placeOrderButton', '.place-order', '[data-automation-id="checkoutButton"]'],
             checkoutLoyalty: ['#coPlusMemberRow', '[data-automation-id="loyaltyDiscount"]'],
+            checkoutPromotions: ['#checkoutPromoRow', '.promo-applied', '[data-automation-id="appliedPromotion"]'],
             checkoutItemQuantity: ['small', '[class*="qty"]'],  // <--- ADDED THIS LINE
 
 
@@ -1272,6 +1273,8 @@
             var parsed = parsePrice(rawPrice);
             if (parsed) {
                 li.price = parsed.amount;
+                li.line_total = parsed.amount;
+
                 if (parsed.currency) li.currency = parsed.currency;
             }
 
@@ -1282,6 +1285,13 @@
             if (qty) {
                 var qNum = parseInt(qty.replace(/[^0-9]/g, ''), 10);
                 if (!isNaN(qNum)) li.quantity = qNum;
+            }
+
+            // Checkout markup renders ONE amount per line — the already
+            // quantity-multiplied line total (same as the cart page). Derive
+            // the true per-unit price from it when quantity > 1.
+            if (li.line_total != null && li.quantity > 1) {
+                li.price = +(li.line_total / li.quantity).toFixed(2);
             }
 
             return li;
@@ -1700,7 +1710,7 @@
             // member 5% off" row on checkout) — mirrors cart's existing
             // loyalty_discount field, which this page never had.
             var checkoutLoyaltyEl = firstMatch(doc, FIELD_SEL.checkoutLoyalty);
-            if (checkoutLoyaltyEl) {
+            if (checkoutLoyaltyEl && !(checkoutLoyaltyEl.style && checkoutLoyaltyEl.style.display === 'none')) {
                 result.loyalty_discount = textOf(checkoutLoyaltyEl, 60);
                 // Feed its dollar amount into savings_numeric so
                 // cart_math_match's reconciliation (subtotal - savings + tax
@@ -1710,6 +1720,90 @@
                 var discMatch = result.loyalty_discount && result.loyalty_discount.match(/\$([\d,]+\.?\d*)/);
                 if (discMatch) result.savings_numeric = parseFloat(discMatch[1].replace(/,/g, ''));
             }
+            // Promotion line items — each visible discount row is its own
+            // object, stacked promos are not collapsed. #checkoutPromoRow is
+            // always in the DOM: app.js sets style.display on it, and the
+            // `hidden` attribute stays even after it is shown, so an inline
+            // display wins and the attribute is only the fallback.
+            var checkoutPromoEls = doc.querySelectorAll(FIELD_SEL.checkoutPromotions.join(', '));
+            var checkoutPromotions = [];
+            checkoutPromoEls.forEach(function (el) {
+                var shown = (el.style && el.style.display) ? el.style.display !== 'none' : !el.hidden;
+                if (!shown) return;
+                var promo = {};
+                var nameEl = el.querySelector('#checkoutPromoName, .promo-name');
+                var amtEl = el.querySelector('#checkoutPromo, .promo-amount, .discount-amount');
+                var promoName = nameEl ? textOf(nameEl, 40) : null;
+                var promoAmt = amtEl ? textOf(amtEl, 20) : null;
+                if (promoName) promo.name = promoName;
+                if (promoAmt) {
+                    promo.amount = promoAmt;
+                    var pctMatch = promoAmt.match(/(\d+)%/);
+                    if (pctMatch) promo.percentage = parseInt(pctMatch[1], 10);
+                    // A code discount reduces the total, so it counts toward
+                    // savings_numeric — otherwise cart_math_match would read a
+                    // correct checkout with a code applied as "math is off".
+                    var parsedPromoAmt = parsePrice(promoAmt);
+                    if (parsedPromoAmt) result.savings_numeric = +((result.savings_numeric || 0) + parsedPromoAmt.amount).toFixed(2);
+                }
+                if (promo.name || promo.amount) checkoutPromotions.push(promo);
+            });
+            if (checkoutPromotions.length) result.promotions = checkoutPromotions;
+
+            // Promo field state / applied code — same convention as the cart
+            // extractor: [data-promo-state] when a retailer sets it, else the
+            // field is simply 'active'; [data-applied-code] names the code.
+            var checkoutPromoInput = firstMatch(doc, FIELD_SEL.promoInput);
+            if (checkoutPromoInput) {
+                var checkoutPromoStateEl = checkoutPromoInput.closest('[data-promo-state]');
+                result.promo_field_state = checkoutPromoStateEl ? checkoutPromoStateEl.getAttribute('data-promo-state') : 'active';
+                var checkoutAppliedEl = checkoutPromoInput.closest('[data-applied-code]');
+                if (checkoutAppliedEl) result.promo_applied_code = checkoutAppliedEl.getAttribute('data-applied-code');
+            } else {
+                result.promo_field_state = 'not-present';
+            }
+            result.promo_field_present = (result.promo_field_state !== 'not-present');
+
+            // Applied discount constructs (sitewide code, loyalty member price...)
+            var checkoutConstructEls = doc.querySelectorAll(FIELD_SEL.appliedDiscountConstructs.join(', '));
+            if (checkoutConstructEls.length > 0) {
+                result.applied_discount_constructs = [];
+                for (var ck = 0; ck < checkoutConstructEls.length; ck++) {
+                    // Strip interactive controls (the promo row's "Remove"
+                    // button) so an action label isn't read as discount text.
+                    var checkoutConstructClone = checkoutConstructEls[ck].cloneNode(true);
+                    var checkoutInnerButtons = checkoutConstructClone.querySelectorAll('button');
+                    for (var cb = 0; cb < checkoutInnerButtons.length; cb++) checkoutInnerButtons[cb].remove();
+                    var checkoutConstructText = checkoutConstructClone.innerText.trim();
+                    if (checkoutConstructText) result.applied_discount_constructs.push(checkoutConstructText);
+                }
+            }
+
+            // Alternative payment controls (Apple Pay / PayPal / Google Pay)
+            var checkoutAltPayments = doc.querySelectorAll(FIELD_SEL.altPaymentButtons.join(', '));
+            if (checkoutAltPayments.length > 0) {
+                result.alt_payment_methods = [];
+                for (var ca = 0; ca < checkoutAltPayments.length; ca++) {
+                    var altClass = (checkoutAltPayments[ca].className || '').toLowerCase();
+                    var altId = (checkoutAltPayments[ca].id || '').toLowerCase();
+                    if (altClass.includes('apple') || altId.includes('apple')) result.alt_payment_methods.push('apple_pay');
+                    else if (altClass.includes('paypal') || altId.includes('paypal')) result.alt_payment_methods.push('paypal');
+                    else if (altClass.includes('google') || altId.includes('google')) result.alt_payment_methods.push('google_pay');
+                }
+            }
+
+            // Promo inline reason (error text shown when a code fails)
+            var checkoutPromoReasonEl = firstMatch(doc, FIELD_SEL.promoInlineReason);
+            if (checkoutPromoReasonEl) result.promo_field_inline_reason = textOf(checkoutPromoReasonEl, 40);
+
+            // Loyalty balance rendered flag
+            result.loyalty_balance_rendered = !!firstMatch(doc, FIELD_SEL.loyaltyBalance);
+
+            // Shipping promise — the literal delivery-estimate string shown
+            var checkoutShipPromiseEl = doc.querySelector('.shipping-promise, #shippingPromise, [data-automation-id="pickupETA"], [data-testid="pickupTimeline"]');
+            var checkoutShipPromise = checkoutShipPromiseEl ? textOf(checkoutShipPromiseEl, 120) : null;
+            if (checkoutShipPromise) result.shipping_promise = checkoutShipPromise;
+
 
             result.order_button_shown = !!firstMatch(doc, FIELD_SEL.checkoutOrderButton);
 
@@ -2718,11 +2812,34 @@
         var MAX_BUFFER_BYTES = 8192;
         var FLUSH_INTERVAL_MS = 15000;
 
-        function extractCurrency(text) {
+        // old
+        /*function extractCurrency(text) {
             if (!text) return null;
             var match = text.match(/[\$£€₹¥]/);
             return match ? match[0] : null;
+        }*/
+
+        // Surface for an interaction event: same taxonomy as Tier 1 (getSurface),
+        // plus 'cart' for cart line items and 'hero' for the PDP hero block.
+        function eventSurface(el) {
+            if (el.closest('.cart-item, #cartItems')) return 'cart';
+            if (el.closest('#hero')) return 'hero';
+            return getSurface(el);
         }
+
+        // Shared by the checkout-form submit and the thank-you page-load paths.
+        function readOrderData() {
+            var orderData = { order_confirmed: true, order_total_displayed: null, order_currency: null, line_item_count: 0 };
+            var totalEl = firstMatch(document, FIELD_SEL.checkoutTotal) || document.querySelector('.order-total');
+            var parsedOrder = totalEl ? parsePrice(totalEl.textContent.trim()) : null;
+            if (parsedOrder) {
+                orderData.order_total_displayed = parsedOrder.amount;
+                orderData.order_currency = parsedOrder.currency;
+            }
+            orderData.line_item_count = document.querySelectorAll('#checkoutItems .mini-item, #checkoutItems li, .order-item').length;
+            return orderData;
+        }
+
 
         function flushInteractionEvents(reason) {
             if (interactionBuffer.length === 0) return;
@@ -2811,16 +2928,16 @@
                 // MATCH: purchase_completed (SPA form submit on checkout page)
                 var isCheckoutForm = target.matches('form#checkoutForm, form.checkout-form') || target.querySelector('[data-action="place-order"], .place-order, #placeOrderButton');
                 if (isCheckoutForm) {
-                    var orderData = { order_confirmed: true, order_total_displayed: null, order_currency: null, line_item_count: 0 };
+                    /*var orderData = { order_confirmed: true, order_total_displayed: null, order_currency: null, line_item_count: 0 };
                     var totalEl = firstMatch(document, FIELD_SEL.checkoutTotal) || document.querySelector('.order-total');
                     if (totalEl) {
                         orderData.order_total_displayed = totalEl.textContent.trim();
                         orderData.order_currency = extractCurrency(orderData.order_total_displayed);
                     }
                     var items = document.querySelectorAll('#checkoutItems .mini-item, #checkoutItems li, .order-item');
-                    orderData.line_item_count = items.length;
+                    orderData.line_item_count = items.length;*/
 
-                    pushEvent("purchase_completed", orderData, true); // Flush immediately!
+                    pushEvent("purchase_completed", readOrderData(), true); // Flush immediately!
                 }
 
 
@@ -2866,6 +2983,7 @@
                 var target = e.target;
                 if (!target) return;
 
+                /*---old---
                 // ================================================================
                 // NEW : Priority 3 - promo_code_applied / promo_removed
                 // ================================================================
@@ -2888,20 +3006,65 @@
                                 code: codeStr,
                                 result: 'unknown',
                                 discount_amount_shown: null
+                            };*/
+
+                // NEW : Priority 3 - promo_code_applied / promo_code_removed
+                // ================================================================
+                // 1. Check for Promo Remove Click (cart and checkout pages)
+                var isPromoRemove = target.closest('#removePromoBtn, #removeCheckoutPromoBtn, button[id*="removePromo"]');
+                if (isPromoRemove) {
+                    var removedCodeEl = document.querySelector('#promoCodeName, #checkoutPromoName');
+                    pushEvent("promo_code_removed", { code: removedCodeEl ? removedCodeEl.textContent.trim() : null });
+                    return; // Stop here so remove_from_cart doesn't fire!
+                }
+                // 2. Check for Promo Apply Click (cart and checkout pages)
+                var isPromoClick = target.closest('#applyPromoBtn, #applyCheckoutPromoBtn, button[id*="promo"], button[id*="apply"]');
+                if (isPromoClick) {
+                    var promoInputEl = document.querySelector('#promoInput, #checkoutPromoInput, input[name*="promo"], input[name*="discount"]');
+                    // An empty field is a no-op in the page's own handler, so it is not an event
+                    if (promoInputEl && promoInputEl.value.trim()) {
+                        var codeStr = promoInputEl.value.trim();
+                        // Error toasts already on screen from an earlier attempt
+                        // must not be read as this click's result
+                        var staleErrorToasts = Array.prototype.slice.call(document.querySelectorAll('.toast.error'));
+
+                        // Wait 500ms to allow your app.js logic to run and update the UI
+                        setTimeout(function () {
+                            // Only accepted / rejected: rejected if an error is visible, otherwise accepted
+                            var promoData = {
+                                code: codeStr,
+                                result: 'accepted',
+                                discount_amount_shown: null
                             };
+
                             // Check if an error message appeared
-                            var errorEl = document.querySelector('.promo-error, .discount-error, #promoError, .toast.error');
-                            if (errorEl && errorEl.offsetParent !== null) {
+                            var errorEl = null;
+                            var errorCandidates = document.querySelectorAll('.promo-error, .discount-error, #promoError, .toast.error');
+                            for (var ei = 0; ei < errorCandidates.length; ei++) {
+                                if (errorCandidates[ei].offsetParent !== null && staleErrorToasts.indexOf(errorCandidates[ei]) === -1) { errorEl = errorCandidates[ei]; break; }
+                            }
+                            if (errorEl) {
+
                                 promoData.result = 'rejected';
                                 pushEvent("promo_code_rejected", promoData);
                             } else {
                                 // Check if the success row is visible
-                                var successEl = document.querySelector('#promoRow, .promo-applied');
+                                //--old--
+                                /*var successEl = document.querySelector('#promoRow, .promo-applied');
                                 if (successEl && successEl.offsetParent !== null) {
                                     promoData.result = 'accepted';
                                     var amtEl = successEl.querySelector('#summaryPromo, .promo-amount');
                                     if (amtEl) promoData.discount_amount_shown = amtEl.textContent.trim();
+                                }*/
+
+                                var successEl = document.querySelector('#promoRow, #checkoutPromoRow, .promo-applied');
+                                if (successEl && successEl.offsetParent !== null) {
+                                    var amtEl = successEl.querySelector('#summaryPromo, #checkoutPromo, .promo-amount');
+                                    var parsedAmt = amtEl ? parsePrice(amtEl.textContent.trim()) : null;
+                                    if (parsedAmt) promoData.discount_amount_shown = parsedAmt.amount;
                                 }
+
+
                                 pushEvent("promo_code_applied", promoData);
                             }
                             // Re-capture the full payload now that the cart reflects
@@ -2924,10 +3087,17 @@
                     cartTotals.cart_line_count = items.length;
 
                     var totalEl = firstMatch(document, FIELD_SEL.cartTotal);
-                    if (totalEl) {
+                    //--old--
+                    /*if (totalEl) {
                         cartTotals.cart_displayed_total = totalEl.textContent.trim();
                         cartTotals.cart_displayed_currency = extractCurrency(cartTotals.cart_displayed_total);
+                    }*/
+                    var parsedCartTotal = totalEl ? parsePrice(totalEl.textContent.trim()) : null;
+                    if (parsedCartTotal) {
+                        cartTotals.cart_displayed_total = parsedCartTotal.amount;
+                        cartTotals.cart_displayed_currency = parsedCartTotal.currency;
                     }
+
                     // Flush immediately (sendBeacon survives navigation); the
                     // page's own handler then navigates as normal.
                     pushEvent("checkout_initiated", cartTotals, true);
@@ -2944,9 +3114,15 @@
 
                 if (isAddBtn) {
                     var productCard = target.closest('.product-card, .product-tile, [data-product-id], [data-sku], article, [data-automation-id="product-pod"], #hero');
-                    var eventData = { sku: null, surface: "catalog-grid", position: 1, price: null, currency: null };
+                    //---old---
+                    /*var eventData = { sku: null, surface: "catalog-grid", position: 1, price: null, currency: null };
+
+                    if (productCard) {*/
+                    var eventData = { sku: null, surface: "other", position: 1, displayed_price: null, displayed_currency: null };
 
                     if (productCard) {
+                        eventData.surface = eventSurface(productCard);
+
                         var siblings = productCard.parentElement ? productCard.parentElement.children : [];
                         for (var i = 0; i < siblings.length; i++) {
                             if (siblings[i] === productCard) { eventData.position = i + 1; break; }
@@ -2975,8 +3151,9 @@
                             // Only replace the code inside this block!
                             var parsed = parsePrice(priceEl.textContent.trim());
                             if (parsed) {
-                                eventData.price = parsed.amount;
-                                eventData.currency = parsed.currency;
+                                eventData.displayed_price = parsed.amount;
+                                eventData.displayed_currency = parsed.currency;
+
                             }
                         }
                     }
@@ -2992,7 +3169,7 @@
 
                 if (isRemoveBtn) {
                     var cartItem = target.closest('.cart-item, [data-automation-id="cart-item"], article');
-                    var removeData = { sku: null, quantity_before_remove: null, line_total: null, currency: null };
+                    var removeData = { sku: null, quantity_before_remove: null, displayed_line_total: null, displayed_currency: null };
 
                     if (cartItem) {
                         // 2-STEP SKU EXTRACTION
@@ -3011,8 +3188,9 @@
                         if (lineTotalEl) {
                             var parsedTotal = parsePrice(lineTotalEl.textContent.trim());
                             if (parsedTotal) {
-                                removeData.line_total = parsedTotal.amount;
-                                removeData.currency = parsedTotal.currency;
+                                removeData.displayed_line_total = parsedTotal.amount;
+                                removeData.displayed_currency = parsedTotal.currency;
+
                             }
                         }
                         var qtyEl = firstMatch(cartItem, FIELD_SEL.cartItemQuantity);
@@ -3048,7 +3226,7 @@
                 var clickedCard = target.closest('.product-card, .product-tile, [data-product-id], article, [data-automation-id="product-pod"]');
                 var isCardClick = clickedCard && (target.closest('a') || target.closest('.product-image') || target.tagName === 'H3' || target.tagName === 'IMG' || target.tagName === 'P');
                 if (isCardClick && !target.closest('[data-action="add-to-cart"], .add-to-cart, button')) {
-                    var cardData = { sku: null, surface: "catalog-grid", position: 1, price: null, currency: null };
+                    var cardData = { sku: null, surface: eventSurface(clickedCard), position: 1, displayed_price: null, displayed_currency: null };
                     var cardSiblings = clickedCard.parentElement ? clickedCard.parentElement.children : [];
                     for (var j = 0; j < cardSiblings.length; j++) {
                         if (cardSiblings[j] === clickedCard) { cardData.position = j + 1; break; }
@@ -3065,8 +3243,8 @@
                     if (cardPriceEl) {
                         var parsed = parsePrice(cardPriceEl.textContent.trim());
                         if (parsed) {
-                            cardData.price = parsed.amount;
-                            cardData.currency = parsed.currency;
+                            cardData.displayed_price = parsed.amount;
+                            cardData.displayed_currency = parsed.currency;
                         }
                     }
 
@@ -3083,9 +3261,11 @@
                 var isQuickViewBtn = target.closest('.quick-view, [data-action="quick-view"], button[aria-label*="quick view" i]:not(.modal-close):not([aria-label*="close" i])');
                 if (isQuickViewBtn) {
                     var qvCard = target.closest('.product-card, .product-tile, article, [data-automation-id="product-pod"]');
-                    var qvData = { sku: null, surface: "catalog-grid", position: 1 };
+                    var qvData = { sku: null, surface: "other", position: 1 };
 
                     if (qvCard) {
+                        qvData.surface = eventSurface(qvCard);
+
                         var qvCardSku = qvCard.getAttribute('data-product-id') || qvCard.getAttribute('data-sku');
                         if (!qvCardSku) {
                             var qvSkuEl = firstMatch(qvCard, FIELD_SEL.sku);
@@ -3108,8 +3288,10 @@
                 var isWishlistBtn = target.closest('.wishlist-button, [data-action="wishlist"], [data-save], button[aria-label*="wishlist" i]');
                 if (isWishlistBtn) {
                     var wlCard = target.closest('.product-card, .product-tile, article, .cart-item');
-                    var wlData = { sku: null, surface: wlCard && wlCard.classList.contains('cart-item') ? "cart" : "catalog-grid", position: 1, price: null, currency: null };
+                    var wlData = { sku: null, surface: "other", position: 1, displayed_price: null, displayed_currency: null };
                     if (wlCard) {
+                        wlData.surface = eventSurface(wlCard);
+
                         var wlCardSku = wlCard.getAttribute('data-product-id') || wlCard.getAttribute('data-sku') || wlCard.getAttribute('data-cart-id');
                         if (!wlCardSku) {
                             var wlSkuEl = firstMatch(wlCard, FIELD_SEL.sku);
@@ -3121,8 +3303,8 @@
                             // FIX: Added the parsePrice logic!
                             var parsedWl = parsePrice(wlPriceEl.textContent.trim());
                             if (parsedWl) {
-                                wlData.price = parsedWl.amount;
-                                wlData.currency = parsedWl.currency;
+                                wlData.displayed_price = parsedWl.amount;
+                                wlData.displayed_currency = parsedWl.currency;
                             }
                         }
                         var wlSiblings = wlCard.parentElement ? wlCard.parentElement.children : [];
@@ -3160,10 +3342,14 @@
                             qtyData.quantity_after = isQtyBtn.hasAttribute('data-inc') || isQtyBtn.classList.contains('qty-plus') ? currentQty + 1 : Math.max(0, currentQty - 1);
                         }
 
+                        var qtyCurrency = null;
                         var lineTotalElQty = firstMatch(qtyItem, FIELD_SEL.cartItemLineTotal);
-                        if (lineTotalElQty) {
-                            qtyData.line_total_before = lineTotalElQty.textContent.trim();
+                        var parsedBefore = lineTotalElQty ? parsePrice(lineTotalElQty.textContent.trim()) : null;
+                        if (parsedBefore) {
+                            qtyData.line_total_before = parsedBefore.amount;
+                            qtyCurrency = parsedBefore.currency;
                         }
+
 
                         // Wait 500ms for Shopora to recalculate and redraw the cart
                         setTimeout(function () {
@@ -3171,14 +3357,20 @@
                             var freshItem = document.querySelector('[data-cart-id="' + qtySku + '"], [data-product-id="' + qtySku + '"]');
                             if (freshItem) {
                                 var newTotalEl = firstMatch(freshItem, FIELD_SEL.cartItemLineTotal);
-                                if (newTotalEl) {
-                                    qtyData.line_total_after = newTotalEl.textContent.trim();
-                                }
+                                var parsedAfter = newTotalEl ? parsePrice(newTotalEl.textContent.trim()) : null;
+                                if (parsedAfter) qtyData.line_total_after = parsedAfter.amount;
                             }
                             // If the user drops the quantity to 0, they effectively removed it!
                             if (qtyData.quantity_after === 0) {
-                                pushEvent("remove_from_cart", qtyData, true); // Log it as a REMOVE event
+                                // Log it as a REMOVE event, in the standard remove_from_cart shape
+                                pushEvent("remove_from_cart", {
+                                    sku: qtyData.sku,
+                                    quantity_before_remove: qtyData.quantity_before,
+                                    displayed_line_total: qtyData.line_total_before,
+                                    displayed_currency: qtyCurrency
+                                }, true);
                             } else {
+
                                 pushEvent("quantity_changed", qtyData); // Log it as a QUANTITY event
                             }
 
@@ -3200,7 +3392,8 @@
         function checkPurchaseCompleted() {
             var url = window.location.href.toLowerCase();
             if (url.includes('/thank-you') || url.includes('/order-complete') || url.includes('/confirmation') || url.includes('/receipt') || document.body.innerHTML.toLowerCase().includes('thank you for your order')) {
-                var orderData = { order_confirmed: true, order_total_displayed: null, order_currency: null, line_item_count: 0 };
+                //----old----
+                /*var orderData = { order_confirmed: true, order_total_displayed: null, order_currency: null, line_item_count: 0 };
                 var totalEl = firstMatch(document, FIELD_SEL.checkoutTotal) || document.querySelector('.order-total');
                 if (totalEl) {
                     orderData.order_total_displayed = totalEl.textContent.trim();
@@ -3209,6 +3402,9 @@
                 var items = document.querySelectorAll('#checkoutItems li, .order-item');
                 orderData.line_item_count = items.length;
                 pushEvent("purchase_completed", orderData);
+                flushInteractionEvents("page-load");*/
+
+                pushEvent("purchase_completed", readOrderData());
                 flushInteractionEvents("page-load");
             }
         }

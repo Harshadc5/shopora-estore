@@ -487,11 +487,18 @@ function renderCheckout() {
     document.querySelector('#checkoutDelivery').textContent = delivery ? money(delivery) : 'FREE';
 
     const promoRow = document.querySelector('#checkoutPromoRow');
+    // Same convention as the cart: data-applied-code sits on the promo
+    // field's own wrapper, and data-discount-type on the savings row only
+    // while it is shown (tag.js reads a detached copy, so a row that is
+    // merely display:none would still be read).
+    const coPromoWrap = document.querySelector('#checkoutPromoInput') && document.querySelector('#checkoutPromoInput').parentElement;
     if (promoRow) {
       if (activePromo && promoDiscount > 0) {
         promoRow.style.display = 'flex';
+        promoRow.dataset.discountType = 'code';
         document.querySelector('#checkoutPromoName').textContent = activePromo;
         document.querySelector('#checkoutPromo').textContent = '-' + money(promoDiscount);
+        if (coPromoWrap) coPromoWrap.setAttribute('data-applied-code', activePromo);
         const removeBtn = document.querySelector('#removeCheckoutPromoBtn');
         if (removeBtn && !removeBtn.hasAttribute('data-bound')) {
           removeBtn.setAttribute('data-bound', 'true');
@@ -499,6 +506,8 @@ function renderCheckout() {
         }
       } else {
         promoRow.style.display = 'none';
+        delete promoRow.dataset.discountType;
+        if (coPromoWrap) coPromoWrap.removeAttribute('data-applied-code');
       }
     }
 
@@ -520,8 +529,12 @@ function renderCheckout() {
       }
       document.querySelector('#coPlusMemberAmt').textContent = '-' + money(subtotal * 0.05);
       _coPlusRow.style.display = 'flex';
+      _coPlusRow.dataset.discountType = 'loyalty';
     } else {
-      if (_coPlusRow) _coPlusRow.style.display = 'none';
+      if (_coPlusRow) {
+        _coPlusRow.style.display = 'none';
+        delete _coPlusRow.dataset.discountType;
+      }
       document.querySelector('#checkoutTotal').textContent = money(finalTotal);
     }
 
