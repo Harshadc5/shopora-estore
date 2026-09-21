@@ -3,6 +3,7 @@
 // This file deliberately does NOT render identity or the loyalty chip — app.js's initIdentity() and initLoyaltyChip() already do this correctly, driven by the same ?identity=/&member_tier= URL params, using the exact attributes tag.js reads. The one exception is Scenario 1.4, whose trigger URL has no ?identity= param at all, yet still needs a recognized Plus member — forceIdentity() covers that case only.
 
 import { products } from './data/products.js';
+import { demoCustomerHash } from './data/customer.js';
 // versioned separately from this file's own <script> tag ?v= — bump this
 // whenever demo_scenarios.js content changes, so edits can't get stuck
 // behind a stale cached copy.
@@ -185,7 +186,7 @@ function forceIdentity(identity) {
     if (chip) {
         chip.dataset.identityState = identity.state;
         if (identity.tier) chip.dataset.memberTier = identity.tier;
-        chip.dataset.customerHash = 'demo-customer-hash-abc123';
+        chip.dataset.customerHash = demoCustomerHash();
         chip.innerHTML = '<span class="greeting">Hello, Rahul</span><strong class="account-label">Shopora Plus</strong>';
     }
     if (identity.tier === 'plus') {

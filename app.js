@@ -1,4 +1,5 @@
 import { products, categories } from './data/products.js';
+import { demoCustomerHash } from './data/customer.js';
 
 const CART_KEY = 'shopora-cart-v2';
 const FULL_PRICE_KEY = 'shopora-fullprice-v1';
@@ -1088,7 +1089,7 @@ function initIdentity() {
     if (params.get('identity') === 'logged-in') {
       chip.dataset.identityState = 'recognized';
       chip.dataset.memberTier = 'plus';
-      chip.dataset.customerHash = 'demo-customer-hash-abc123';
+      chip.dataset.customerHash = demoCustomerHash();
       chip.innerHTML = '<span class="greeting">Hello, Rahul</span><strong class="account-label">Shopora Plus</strong>';
     }
 
