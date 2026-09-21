@@ -182,6 +182,32 @@
         // True only while the order-submit snapshot is being assembled.
         var orderSubmitSnapshot = false;
 
+        // Layer 1 (schema v3) Group 2 helpers.
+        function claimSurfaceIdFromPage() {
+            try {
+                var els = document.querySelectorAll('[data-claim-surface-id]');
+                for (var i = 0; i < els.length; i++) {
+                    if (els[i].offsetParent !== null) return els[i].getAttribute('data-claim-surface-id');
+                }
+            } catch (e) { }
+            return null;
+        }
+        function viaBannerFlag() {
+            try { return window.sessionStorage.getItem('aiora_via_banner') === '1'; } catch (e) { return false; }
+        }
+        function currentCartCount() {
+            var el = document.querySelector('[data-cart-count]');
+            var n = el ? parseInt(el.textContent, 10) : NaN;
+            return isNaN(n) ? null : n;
+        }
+        // Remember the cart size as the page is left, so the next cart page can tell whether it was emptied in between.
+        window.addEventListener('pagehide', function () {
+            try {
+                var n = currentCartCount();
+                if (n !== null && window.sessionStorage) window.sessionStorage.setItem('aiora_last_cart_count', String(n));
+            } catch (e) { }
+        });
+
 
 
         // ================================================================
@@ -620,6 +646,11 @@
                     }
                 }
 
+                // The site's real search results page is category.html?q=... — report it as a search page.
+                if (pageType === 'category') {
+                    try { if (new URLSearchParams(window.location.search).get('q')) pageType = 'search'; } catch (e) { }
+                }
+
                 // --- NEW TIER 0 EXTRACTION LOGIC w.r.t Canonical Signal Schema
 
                 // 1. Sequence number (defaults to 1 for standard page loads)
@@ -645,6 +676,9 @@
 
                 // 6. Region
                 var region = document.documentElement.lang || 'unknown';
+                // Interim, permission-free region hint (e.g. "Asia/Calcutta"); `region` above is unchanged.
+                var regionGuess = null;
+                try { regionGuess = Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch (e) { }
 
                 // 7. Identity summary (Basic stub until we build Tier 5)
                 // --- NEW: IDENTITY EXTRACTION ---
@@ -662,6 +696,7 @@
 
                     var hashStr = idEl.getAttribute('data-customer-hash');
                     if (hashStr) identitySummary.customer_hash = hashStr;
+                    if (identitySummary.state === 'recognized') { try { window.sessionStorage.setItem('aiora_was_recognized', '1'); } catch (e) { } }
                 }
 
 
@@ -706,6 +741,7 @@
                     viewport: viewport,
                     surface_id: surfaceId,
                     region: region,
+                    region_guess: regionGuess,
                     identity_summary: identitySummary,
                     customer_hash: identitySummary.customer_hash || null,
                     recognized: identitySummary.state === 'recognized',
@@ -718,7 +754,9 @@
                     browser: detectBrowser(),
                     render_id: renderId,
                     query_hash: visibleQuery ? hashText(visibleQuery) : null,
-                    category_id: categoryIdFromPage()
+                    category_id: categoryIdFromPage(),
+                    claim_surface_id: claimSurfaceIdFromPage(),
+                    via_banner: (pageType === 'pdp') && viaBannerFlag()
                 };
             } catch (e) { return {}; }
         }
@@ -1710,6 +1748,17 @@
             var attemptedCode = promoGroupEl ? promoGroupEl.getAttribute('data-attempted-code') : null;
             if (attemptedCode || result.promo_applied_code) result.code_entered = attemptedCode || result.promo_applied_code;
             result.code_rejected = !!(promoGroupEl && promoGroupEl.getAttribute('data-promo-result') === 'rejected');
+            // Layer 1 (schema v3): did the cart keep the shopper's identity, and was it emptied by the handoff?
+            var cartIdentityEl = doc.querySelector('[data-identity-state]');
+            var nowRecognized = !!(cartIdentityEl && cartIdentityEl.getAttribute('data-identity-state') === 'recognized');
+            var wasRecognized = false, previousCartCount = null;
+            try {
+                wasRecognized = window.sessionStorage.getItem('aiora_was_recognized') === '1';
+                var storedCount = window.sessionStorage.getItem('aiora_last_cart_count');
+                if (storedCount !== null) previousCartCount = parseInt(storedCount, 10);
+            } catch (e) { }
+            result.identity_state = nowRecognized ? 'kept' : (wasRecognized ? 'lost' : null);
+            result.cart_emptied = !!(previousCartCount > 0 && (result.line_items || []).length === 0);
 
             // 6 & 7. Shipping Promise & Threshold Messaging
             var shippingPromiseEl = doc.querySelector('.shipping-promise, #shippingPromise, [data-automation-id="pickupETA"], [data-testid="pickupTimeline"]');
@@ -2542,6 +2591,8 @@
 
             var campaignRef = el.getAttribute('data-campaign') || el.getAttribute('data-claim-code');
             if (campaignRef) mod.campaign_ref = campaignRef;
+            var surfaceIdAttr = el.getAttribute('data-claim-surface-id');
+            if (surfaceIdAttr) mod.claim_surface_id = surfaceIdAttr;
 
             return mod;
         }
@@ -2835,6 +2886,15 @@
                     persistent_storage_used: false,
                 },
             });
+            // Layer 1 (schema v3) slot rows: the first ten items of a search or category results grid.
+            if ((pageType === 'search' || pageType === 'category') && t1) {
+                var slots = [];
+                for (var si = 0; si < t1.length && slots.length < 10; si++) {
+                    if (t1[si].surface !== 'catalog-grid' && t1[si].surface !== 'search-results') continue;
+                    slots.push({ pos: slots.length + 1, sku: t1[si].sku || null, brand_id: t1[si].brand || null, placement: t1[si].sponsored ? 'sponsored' : 'organic' });
+                }
+                if (slots.length) payload.slots = slots;
+            }
             return payload;
         }
 
@@ -3156,6 +3216,12 @@
             try {
                 var target = e.target;
                 if (!target) return;
+                // Layer 1: remember a banner / hero link click so later product pages report via_banner.
+                var bannerLink = target.closest('a');
+                if (bannerLink && bannerLink.closest('.promo-banner, .hero, [data-module-type="banner"], [data-module-type="hero"], [data-module-type="promo"]')) {
+                    try { window.sessionStorage.setItem('aiora_via_banner', '1'); } catch (bannerErr) { }
+                }
+
 
                 /*---old---
                 // ================================================================
