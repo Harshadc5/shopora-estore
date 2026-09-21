@@ -32,9 +32,11 @@ function applyPromo(code, page) {
   const normalized = code.trim().toUpperCase();
   if (!normalized) return;
   if (!PROMO_CODES[normalized]) {
+    showPromoRejected(normalized);
     toast('Invalid promo code.', 'error');
     return;
   }
+  clearPromoRejected();
   activePromo = normalized;
   sessionStorage.setItem(PROMO_KEY, JSON.stringify(activePromo));
   toast('Promo code applied!', 'success');
@@ -42,7 +44,37 @@ function applyPromo(code, page) {
   if (page === 'checkout') renderCheckout();
 }
 
+// A rejected code keeps the promo field 'active' — the rejection is recorded
+// separately (data-promo-result / data-attempted-code on the field's wrapper,
+// plus a visible inline message) so tag.js can read code_entered / code_rejected.
+function promoFieldGroup() {
+  const input = document.querySelector('#promoInput, #checkoutPromoInput');
+  return input ? input.parentElement : null;
+}
+function clearPromoRejected() {
+  const group = promoFieldGroup();
+  if (!group) return;
+  group.removeAttribute('data-promo-result');
+  group.removeAttribute('data-attempted-code');
+  const next = group.nextElementSibling;
+  if (next && next.classList.contains('promo-error')) next.remove();
+}
+function showPromoRejected(code) {
+  const group = promoFieldGroup();
+  if (!group) return;
+  clearPromoRejected();
+  group.setAttribute('data-promo-result', 'rejected');
+  group.setAttribute('data-attempted-code', code);
+  const message = document.createElement('p');
+  message.className = 'promo-error';
+  message.setAttribute('role', 'alert');
+  message.style.cssText = 'color:#b42318;font-size:0.8rem;margin:0.25rem 0 0.5rem;';
+  message.textContent = 'Invalid code. Please try again.';
+  group.insertAdjacentElement('afterend', message);
+}
+
 function removePromo(page) {
+  clearPromoRejected();
   activePromo = null;
   sessionStorage.removeItem(PROMO_KEY);
   toast('Promo code removed.', 'success');
@@ -532,6 +564,9 @@ function renderRecommendations() {
 }
 function renderCheckout() {
   const container = document.querySelector('#checkoutItems'), form = document.querySelector('#checkoutForm'); if (!container || !form) return;
+  // The order id is fixed before submit so tag.js (which reads it in the capture phase, before this handler runs) can report it.
+  const newOrderId = () => 'SP' + Date.now().toString().slice(-8);
+  form.dataset.nextOrderId = newOrderId();
   const update = () => {
     const items = cartItems(), subtotal = cartSubtotal(), oversizedFee = oversizedFeeFor(items), delivery = deliveryFor(subtotal) + oversizedFee;
     // Same summary layout as the cart: Items and Subtotal at list price, then a
@@ -652,7 +687,8 @@ function renderCheckout() {
     event.preventDefault();
     const items = cartItems();
     if (!items.length) { toast('Your cart is empty.'); return; }
-    const orderId = 'SP' + Date.now().toString().slice(-8);
+    const orderId = form.dataset.nextOrderId || newOrderId();
+    form.dataset.nextOrderId = newOrderId();
 
     // Save order
     const pastOrders = JSON.parse(localStorage.getItem('shopora-orders') || '[]');
@@ -682,7 +718,7 @@ function renderCheckout() {
     update();
     form.reset();
     const message = document.querySelector('#orderMessage');
-    message.innerHTML = `<div class="success-card"><span>✓</span><h2>Order confirmed!</h2><p>Your demo order <strong>#${orderId}</strong> has been placed successfully.</p><p>No payment was processed.</p><a class="button button-accent full-width" href="./orders.html">View order tracking</a><a class="button button-ghost full-width" style="margin-top:0.5rem; color: var(--navy); border: 1px solid var(--line);" href="./index.html">Continue shopping</a></div>`;
+    message.innerHTML = `<div class="success-card" data-order-id="${orderId}"><span>✓</span><h2>Order confirmed!</h2><p>Your demo order <strong>#${orderId}</strong> has been placed successfully.</p><p>No payment was processed.</p><a class="button button-accent full-width" href="./orders.html">View order tracking</a><a class="button button-ghost full-width" style="margin-top:0.5rem; color: var(--navy); border: 1px solid var(--line);" href="./index.html">Continue shopping</a></div>`;
     message.hidden = false;
   });
 }

@@ -106,6 +106,82 @@
 
         // Apply it GLOBALLY so both Tier 0 and Tier 10 (Interaction Events) use the exact same ID!
         const sessionToken = resolveSessionToken();
+        // One id per page load — the page_render row's key (new each navigation).
+        var renderId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36);
+
+        // First event time of the visit (tab session).
+        function sessionStartedTs() {
+            try {
+                if (window.sessionStorage) {
+                    var t = window.sessionStorage.getItem('aiora_session_started');
+                    if (!t) { t = new Date().toISOString(); window.sessionStorage.setItem('aiora_session_started', t); }
+                    return t;
+                }
+            } catch (e) { }
+            return null;
+        }
+        // Surface of the first page of the visit, limited to the schema's values: home, category or search (null otherwise).
+        function entrySurfaceFor(pageType) {
+            var mapped = pageType === 'homepage' ? 'home' : (pageType === 'category' || pageType === 'search') ? pageType : null;
+            try {
+                if (window.sessionStorage) {
+                    var s = window.sessionStorage.getItem('aiora_entry_surface');
+                    if (!s) { s = mapped || 'none'; window.sessionStorage.setItem('aiora_entry_surface', s); }
+                    return s === 'none' ? null : s;
+                }
+            } catch (e) { }
+            return mapped;
+        }
+
+        // Page type of the first page of the visit (home / category / search / other).
+        /* function entrySurfaceFor(pageType) {
+             try {
+                 if (window.sessionStorage) {
+                     var s = window.sessionStorage.getItem('aiora_entry_surface');
+                     if (!s) { s = pageType || 'other'; window.sessionStorage.setItem('aiora_entry_surface', s); }
+                     return s;
+                 }
+             } catch (e) { }
+             return pageType || null;
+         }*/
+
+        function detectDevice() {
+            var ua = (navigator.userAgent || '');
+            if (/iPad|Tablet/i.test(ua) || (/Android/i.test(ua) && !/Mobile/i.test(ua))) return 'tablet';
+            if (/Mobi|iPhone|Android/i.test(ua)) return 'mobile';
+            return 'desktop';
+        }
+
+        function detectBrowser() {
+            var ua = (navigator.userAgent || '');
+            if (/Edg|OPR|Firefox|FxiOS/i.test(ua)) return 'other';
+            if (/Chrome|CriOS/i.test(ua)) return 'chrome';
+            if (/Safari/i.test(ua)) return 'safari';
+            return 'other';
+        }
+
+        // 32-bit FNV-1a of the trimmed, lower-cased text, as 8 hex characters.
+        function hashText(text) {
+            var s = String(text || '').trim().toLowerCase();
+            var h = 0x811c9dc5;
+            for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+            return ('00000000' + h.toString(16)).slice(-8);
+        }
+
+        function categoryIdFromPage() {
+            try {
+                var c = new URLSearchParams(window.location.search).get('category');
+                if (c) return c.toLowerCase();
+                // Product page: the hero block carries the product's category.
+                var hero = document.querySelector('#hero[data-category]');
+                if (hero) return hero.getAttribute('data-category').toLowerCase();
+            } catch (e) { }
+            return null;
+        }
+
+        // True only while the order-submit snapshot is being assembled.
+        var orderSubmitSnapshot = false;
+
 
 
         // ================================================================
@@ -631,8 +707,18 @@
                     surface_id: surfaceId,
                     region: region,
                     identity_summary: identitySummary,
+                    customer_hash: identitySummary.customer_hash || null,
+                    recognized: identitySummary.state === 'recognized',
                     visible_query: visibleQuery,
-                    program_match: programMatch
+                    program_match: programMatch,
+                    // Layer 1 (schema v3): session / page_render fields
+                    session_started_ts: sessionStartedTs(),
+                    entry_surface: entrySurfaceFor(pageType),
+                    device: detectDevice(),
+                    browser: detectBrowser(),
+                    render_id: renderId,
+                    query_hash: visibleQuery ? hashText(visibleQuery) : null,
+                    category_id: categoryIdFromPage()
                 };
             } catch (e) { return {}; }
         }
@@ -1608,6 +1694,22 @@
                 var numTax = parseFloat(result.tax.replace(/[^0-9.-]+/g, ''));
                 if (!isNaN(numTax)) result.tax_numeric = numTax;
             }
+            // Layer 1 (schema v3) cart_event fields
+            if (result.subtotal_numeric != null) result.list_value = result.subtotal_numeric;
+            result.markdown_amt = markdownDiscountAmt;
+            var codeAmt = 0;
+            (result.promotions || []).forEach(function (p) {
+                var pa = p.amount ? parsePrice(p.amount) : null;
+                if (pa) codeAmt += Math.abs(pa.amount);
+            });
+            result.code_amt = +codeAmt.toFixed(2);
+            var loyaltyAmtParsed = result.loyalty_discount ? parsePrice(result.loyalty_discount) : null;
+            result.loyalty_amt = loyaltyAmtParsed ? Math.abs(loyaltyAmtParsed.amount) : 0;
+            result.coupon_amt = 0; // Shopora has no separate coupon line
+            var promoGroupEl = promoInput ? promoInput.parentElement : null;
+            var attemptedCode = promoGroupEl ? promoGroupEl.getAttribute('data-attempted-code') : null;
+            if (attemptedCode || result.promo_applied_code) result.code_entered = attemptedCode || result.promo_applied_code;
+            result.code_rejected = !!(promoGroupEl && promoGroupEl.getAttribute('data-promo-result') === 'rejected');
 
             // 6 & 7. Shipping Promise & Threshold Messaging
             var shippingPromiseEl = doc.querySelector('.shipping-promise, #shippingPromise, [data-automation-id="pickupETA"], [data-testid="pickupTimeline"]');
@@ -1674,7 +1776,9 @@
         //---------NEW-------------add -code for first match
         function extractCheckoutState(doc) {
             var result = { page_context: 'checkout', line_items: collectCheckoutLineItems(doc) };
-
+            // Only in the order-submit snapshot, so an abandoned checkout never carries an order id.
+            var orderFormEl = doc.querySelector('#checkoutForm[data-next-order-id], form.checkout-form[data-next-order-id]');
+            if (orderSubmitSnapshot && orderFormEl) result.order_id = orderFormEl.getAttribute('data-next-order-id');
             var subtotal = textOf(firstMatch(doc, FIELD_SEL.checkoutSubtotal), 20);
             var total = textOf(firstMatch(doc, FIELD_SEL.checkoutTotal), 20);
             var delivery = textOf(firstMatch(doc, FIELD_SEL.checkoutDelivery), 20);
@@ -1788,6 +1892,11 @@
                 result.promo_field_state = 'not-present';
             }
             result.promo_field_present = (result.promo_field_state !== 'not-present');
+            var checkoutPromoGroup = checkoutPromoInput ? checkoutPromoInput.parentElement : null;
+            var checkoutAttempted = checkoutPromoGroup ? checkoutPromoGroup.getAttribute('data-attempted-code') : null;
+            if (checkoutAttempted || result.promo_applied_code) result.code_entered = checkoutAttempted || result.promo_applied_code;
+            result.code_rejected = !!(checkoutPromoGroup && checkoutPromoGroup.getAttribute('data-promo-result') === 'rejected');
+
 
             // Applied discount constructs (sitewide code, loyalty member price...)
             var checkoutConstructEls = doc.querySelectorAll(FIELD_SEL.appliedDiscountConstructs.join(', '));
@@ -2876,8 +2985,21 @@
             if (parsedOrder) {
                 orderData.order_total_displayed = parsedOrder.amount;
                 orderData.order_currency = parsedOrder.currency;
+                orderData.order_value = parsedOrder.amount;
+
             }
             orderData.line_item_count = document.querySelectorAll('#checkoutItems .mini-item, #checkoutItems li, .order-item').length;
+            var orderForm = document.querySelector('#checkoutForm[data-next-order-id]');
+            var confirmedCard = document.querySelector('.success-card[data-order-id]');
+            if (orderForm) orderData.order_id = orderForm.getAttribute('data-next-order-id');
+            else if (confirmedCard) orderData.order_id = confirmedCard.getAttribute('data-order-id');
+            var qtyNodes = document.querySelectorAll('#checkoutItems .mini-item small');
+            var unitCount = 0;
+            for (var qi = 0; qi < qtyNodes.length; qi++) {
+                var qm = qtyNodes[qi].textContent.match(/Qty\s*(\d+)/i);
+                if (qm) unitCount += parseInt(qm[1], 10);
+            }
+            if (unitCount) orderData.units = unitCount;
             return orderData;
         }
 
@@ -2891,6 +3013,7 @@
                 tag_version: "0.2.0",
                 client_id: config.clientId,
                 session_token: sessionToken,
+                render_id: renderId,
                 flush_id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substring(2),
                 flush_reason: reason,
                 events: interactionBuffer
@@ -2951,6 +3074,7 @@
                     var searchInput = target.querySelector('input[type="search"], input[name="q"], input[name="search"]');
                     var searchData = {
                         query: searchInput ? searchInput.value.trim() : null,
+                        query_hash: (searchInput && searchInput.value.trim()) ? hashText(searchInput.value) : null,
                         category_scope: null,
                         submission_surface: 'on-page-search-widget'
                     };
@@ -2979,6 +3103,15 @@
                     orderData.line_item_count = items.length;*/
 
                     pushEvent("purchase_completed", readOrderData(), true); // Flush immediately!
+                    // Full checkout payload at the moment of the order, before the site empties the cart.
+                    try {
+                        orderSubmitSnapshot = true;
+                        var orderPayload = assemblePayload(scrubPII(document.documentElement.outerHTML));
+                        orderPayload.capture_trigger = 'order_submitted';
+                        sendPayload(orderPayload);
+                    } catch (snapErr) { }
+                    orderSubmitSnapshot = false;
+
                 }
 
 
