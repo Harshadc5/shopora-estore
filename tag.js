@@ -735,9 +735,9 @@
                 return {
                     // Old Fields
                     client_id: config.clientId,
-                    session_token: sessionToken,
+                    session_id: sessionToken,
                     tag_version: '0.2.0',
-                    timestamp: new Date().toISOString(),
+                    ts: new Date().toISOString(),
                     sampled: sampledIn,
                     page_type: pageType,
                     page_url_path: path.replace(/\/index\.html$/i, '') || '/',
@@ -755,7 +755,7 @@
                     visible_query: visibleQuery,
                     program_match: programMatch,
                     // Layer 1 (schema v3): session / page_render fields
-                    session_started_ts: sessionStartedTs(),
+                    started_ts: sessionStartedTs(),
                     entry_surface: entrySurfaceFor(pageType),
                     device: detectDevice(),
                     browser: detectBrowser(),
@@ -2939,6 +2939,10 @@
                 }
                 if (slots.length) payload.slots = slots;
             }
+            // Layer 1 (schema v3) names, alongside the original names the dashboard and collector still read.
+            var reportedPageType = (pageType === 'homepage') ? 'home' : pageType;
+            payload.page_type = reportedPageType;
+            if (payload.page) payload.page.page_type = reportedPageType;
             return payload;
         }
 
@@ -3118,7 +3122,7 @@
                 schema_version: "0.2.0",
                 tag_version: "0.2.0",
                 client_id: config.clientId,
-                session_token: sessionToken,
+                session_id: sessionToken,
                 render_id: renderId,
                 flush_id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substring(2),
                 flush_reason: reason,
@@ -3141,10 +3145,11 @@
         }
 
         function pushEvent(eventType, fields, flushImmediately) {
+            var eventTs = new Date().toISOString();
             var eventObj = {
                 event_id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substring(2),
                 event_type: eventType,
-                timestamp: new Date().toISOString(),
+                ts: eventTs,
                 page_type: document.body.dataset.pageType || 'unknown',
                 // old (index.html) : page_url_path: window.location.pathname
                 page_url_path: window.location.pathname.replace(/\/index\.html$/i, '') || '/'

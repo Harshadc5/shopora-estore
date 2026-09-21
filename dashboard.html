@@ -387,7 +387,8 @@
       white-space: nowrap
     }
 
-    .page-chip.homepage {
+    .page-chip.homepage,
+    .page-chip.home {
       background: var(--chip-homepage-bg);
       color: var(--chip-homepage-ink)
     }
@@ -804,7 +805,7 @@
       <span class="event-meta">
         <span>client <code>${row.client_id || '—'}</code></span>
         <span>session <code class="session-id">${row.session_token || '—'}</code></span>
-        <span class="event-time">${fmtTime(payload.timestamp || row.created_at)}</span>
+        <span class="event-time">${fmtTime(payload.ts || payload.timestamp || row.created_at)}</span>
       </span>
     `;
         head.addEventListener('click', () => card.classList.toggle('open'));
@@ -870,7 +871,7 @@
         statPages.textContent = seenPages.size;
         const fiveMinAgo = Date.now() - 5 * 60 * 1000;
         statRecent.textContent = rows.filter(r => {
-          const t = r.payload && r.payload.timestamp ? new Date(r.payload.timestamp).getTime() : (r.created_at ? new Date(r.created_at).getTime() : 0);
+          const t = r.payload && (r.payload.ts || r.payload.timestamp) ? new Date(r.payload.ts || r.payload.timestamp).getTime() : (r.created_at ? new Date(r.created_at).getTime() : 0);
           return t >= fiveMinAgo;
         }).length;
       }
@@ -918,6 +919,8 @@
         const pageType = pageTypeSelect.value;
         if (!pageType) return q;
         if (pageType === 'interaction_events') return q.eq('payload->>envelope_type', 'interaction_events');
+        // The tag now reports the homepage as 'home'; older stored rows say 'homepage'.
+        if (pageType === 'homepage') return q.in('payload->page->>page_type', ['homepage', 'home']);
         return q.eq('payload->page->>page_type', pageType);
       }
 

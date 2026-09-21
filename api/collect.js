@@ -28,7 +28,7 @@ export default async function handler(req, res) {
       console.log(`📄 Page      : ${payload.page?.page_type?.toUpperCase()} — ${payload.page?.page_url}`);
       console.log(`🆔 Client    : ${payload.client_id}`);
       console.log(`🔑 Beacon ID : ${payload.beacon_id}`);
-      console.log(`⏱  Timestamp : ${payload.timestamp}`);
+      console.log(`⏱  Timestamp : ${payload.ts || payload.timestamp}`);
 
       // Promo banners
       const banners = payload.signals?.promo_banners || [];
@@ -67,7 +67,8 @@ export default async function handler(req, res) {
         const { error } = await supabase.from('events').insert([
           {
             client_id: payload.client_id,
-            session_token: payload.session_token || null,
+            // The tag sends session_id (schema v3); older rows used session_token. The column name is unchanged.
+            session_token: payload.session_id || payload.session_token || null,
             page_url: payload.page?.page_url || 'unknown',
             payload: payload
           }
