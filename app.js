@@ -3,6 +3,7 @@ import { demoCustomerHash } from './data/customer.js';
 
 const CART_KEY = 'shopora-cart-v2';
 const FULL_PRICE_KEY = 'shopora-fullprice-v1';
+const CART_ID_KEY = 'shopora-cart-id-v1';
 const WISHLIST_KEY = 'shopora-wishlist';
 const PROMO_KEY = 'shopora-promo';
 const USD_RATE = 1;
@@ -159,7 +160,23 @@ function toggleWishlist(id, button) {
   saveWishlist();
   toast(wishlist.has(id) ? 'Saved to your wishlist.' : 'Removed from your wishlist.');
 }
+// One id per cart: created when the first product is added to an empty cart, kept while
+// the cart has items, dropped when it empties (the next added product starts a new cart).
+// Shown as data-cart-id on <body> so tag.js can report it.
+function syncCartId() {
+  let id = null;
+  try { id = localStorage.getItem(CART_ID_KEY); } catch (e) { /* storage blocked */ }
+  if (cartCount() === 0) {
+    id = null;
+    try { localStorage.removeItem(CART_ID_KEY); } catch (e) { /* storage blocked */ }
+  } else if (!id) {
+    id = 'ct_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    try { localStorage.setItem(CART_ID_KEY, id); } catch (e) { /* storage blocked */ }
+  }
+  if (id) document.body.dataset.cartId = id; else delete document.body.dataset.cartId;
+}
 function updateHeaderCounts() {
+  syncCartId();
   document.querySelectorAll('[data-cart-count]').forEach((node) => node.textContent = String(cartCount()));
   document.querySelectorAll('[data-wishlist-count]').forEach((node) => node.textContent = String(wishlist.size));
 }

@@ -1758,6 +1758,9 @@
             } catch (e) { }
             result.identity_state = nowRecognized ? 'kept' : (wasRecognized ? 'lost' : null);
             result.cart_emptied = !!(previousCartCount > 0 && (result.line_items || []).length === 0);
+            var cartPageCartId = doc.body ? doc.body.getAttribute('data-cart-id') : null;
+            if (cartPageCartId) result.cart_id = cartPageCartId;
+
 
             // 6 & 7. Shipping Promise & Threshold Messaging
             var shippingPromiseEl = doc.querySelector('.shipping-promise, #shippingPromise, [data-automation-id="pickupETA"], [data-testid="pickupTimeline"]');
@@ -1973,6 +1976,9 @@
             } catch (e) { }
             result.identity_state = checkoutNowRecognized ? 'kept' : (checkoutWasRecognized ? 'lost' : null);
             result.cart_emptied = !!(checkoutPrevCartCount > 0 && (result.line_items || []).length === 0);
+            var checkoutCartId = doc.body ? doc.body.getAttribute('data-cart-id') : null;
+            if (checkoutCartId) result.cart_id = checkoutCartId;
+
             result.code_rejected = !!(checkoutPromoGroup && checkoutPromoGroup.getAttribute('data-promo-result') === 'rejected');
 
 
@@ -3089,6 +3095,8 @@
                 if (qm) unitCount += parseInt(qm[1], 10);
             }
             if (unitCount) orderData.units = unitCount;
+            var orderCartId = document.body ? document.body.getAttribute('data-cart-id') : null;
+            if (orderCartId) orderData.cart_id = orderCartId;
             return orderData;
         }
 
