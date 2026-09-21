@@ -41,6 +41,8 @@
       --chip-checkout-ink: #b02a20;
       --chip-interaction-bg: #e6f7fb;
       --chip-interaction-ink: #0f6674;
+      --chip-search-bg: #fde7f3;
+      --chip-search-ink: #a3246b;
       --warn-bg: #fff4e5;
       --warn-border: #ffdca8;
       --warn-ink: #8a5400;
@@ -72,6 +74,8 @@
         --chip-checkout-ink: #f18d80;
         --chip-interaction-bg: #0f3138;
         --chip-interaction-ink: #5fd4e8;
+        --chip-search-bg: #46182f;
+        --chip-search-ink: #f39ac6;
         --warn-bg: #3d2c10;
         --warn-border: #6b4e17;
         --warn-ink: #f0c065;
@@ -103,6 +107,8 @@
       --chip-checkout-ink: #f18d80;
       --chip-interaction-bg: #0f3138;
       --chip-interaction-ink: #5fd4e8;
+      --chip-search-bg: #46182f;
+      --chip-search-ink: #f39ac6;
       --warn-bg: #3d2c10;
       --warn-border: #6b4e17;
       --warn-ink: #f0c065;
@@ -383,7 +389,7 @@
       padding: .28rem .55rem;
       border-radius: 6px;
       background: var(--soft);
-      color: var(--navy-2);
+      color: var(--text-strong);
       white-space: nowrap
     }
 
@@ -411,6 +417,11 @@
     .page-chip.checkout {
       background: var(--chip-checkout-bg);
       color: var(--chip-checkout-ink)
+    }
+
+    .page-chip.search {
+      background: var(--chip-search-bg);
+      color: var(--chip-search-ink)
     }
 
     .page-chip.interaction_events {
