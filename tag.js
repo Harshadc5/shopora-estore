@@ -743,7 +743,6 @@
                     region: region,
                     region_guess: regionGuess,
                     identity_summary: identitySummary,
-                    customer_hash: identitySummary.customer_hash || null,
                     recognized: identitySummary.state === 'recognized',
                     visible_query: visibleQuery,
                     program_match: programMatch,
@@ -1944,6 +1943,36 @@
             var checkoutPromoGroup = checkoutPromoInput ? checkoutPromoInput.parentElement : null;
             var checkoutAttempted = checkoutPromoGroup ? checkoutPromoGroup.getAttribute('data-attempted-code') : null;
             if (checkoutAttempted || result.promo_applied_code) result.code_entered = checkoutAttempted || result.promo_applied_code;
+            // Layer 1 (schema v3) cart_event fields — same names as the cart page.
+            if (result.subtotal_numeric != null) result.list_value = result.subtotal_numeric;
+            var checkoutMarkdownEl = doc.querySelector('#checkoutMarkdownAmt');
+            var checkoutMarkdownRow = checkoutMarkdownEl ? checkoutMarkdownEl.closest('.summary-row') : null;
+            var checkoutMarkdownShown = !!checkoutMarkdownEl && !(checkoutMarkdownRow && checkoutMarkdownRow.style && checkoutMarkdownRow.style.display === 'none');
+            var parsedCheckoutMarkdown = checkoutMarkdownShown ? parsePrice(checkoutMarkdownEl.textContent) : null;
+            result.markdown_amt = parsedCheckoutMarkdown ? Math.abs(parsedCheckoutMarkdown.amount) : 0;
+            var checkoutCodeAmt = 0;
+            (result.promotions || []).forEach(function (p) {
+                var pa = p.amount ? parsePrice(p.amount) : null;
+                if (pa) checkoutCodeAmt += Math.abs(pa.amount);
+            });
+            result.code_amt = +checkoutCodeAmt.toFixed(2);
+            var checkoutLoyaltyParsed = result.loyalty_discount ? parsePrice(result.loyalty_discount) : null;
+            result.loyalty_amt = checkoutLoyaltyParsed ? Math.abs(checkoutLoyaltyParsed.amount) : 0;
+            result.coupon_amt = 0; // Shopora has no separate coupon line
+            var checkoutCountEl = doc.querySelector('#checkoutItemCount');
+            var checkoutCountNum = checkoutCountEl ? parseInt(checkoutCountEl.textContent, 10) : NaN;
+            if (!isNaN(checkoutCountNum)) result.item_count = checkoutCountNum;
+
+            var checkoutIdentityEl = doc.querySelector('[data-identity-state]');
+            var checkoutNowRecognized = !!(checkoutIdentityEl && checkoutIdentityEl.getAttribute('data-identity-state') === 'recognized');
+            var checkoutWasRecognized = false, checkoutPrevCartCount = null;
+            try {
+                checkoutWasRecognized = window.sessionStorage.getItem('aiora_was_recognized') === '1';
+                var checkoutStoredCount = window.sessionStorage.getItem('aiora_last_cart_count');
+                if (checkoutStoredCount !== null) checkoutPrevCartCount = parseInt(checkoutStoredCount, 10);
+            } catch (e) { }
+            result.identity_state = checkoutNowRecognized ? 'kept' : (checkoutWasRecognized ? 'lost' : null);
+            result.cart_emptied = !!(checkoutPrevCartCount > 0 && (result.line_items || []).length === 0);
             result.code_rejected = !!(checkoutPromoGroup && checkoutPromoGroup.getAttribute('data-promo-result') === 'rejected');
 
 
