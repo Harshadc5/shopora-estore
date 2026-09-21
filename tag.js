@@ -181,6 +181,14 @@
 
         // True only while the order-submit snapshot is being assembled.
         var orderSubmitSnapshot = false;
+        // The product a product page is about (the hero block's data-sku); null elsewhere.
+        function skuFromPage() {
+            try {
+                var hero = document.querySelector('#hero[data-sku], #hero[data-product-id]');
+                if (hero) return hero.getAttribute('data-sku') || hero.getAttribute('data-product-id') || null;
+            } catch (e) { }
+            return null;
+        }
 
         // Layer 1 (schema v3) Group 2 helpers.
         function claimSurfaceIdFromPage() {
@@ -755,7 +763,8 @@
                     query_hash: visibleQuery ? hashText(visibleQuery) : null,
                     category_id: categoryIdFromPage(),
                     claim_surface_id: claimSurfaceIdFromPage(),
-                    via_banner: (pageType === 'pdp') && viaBannerFlag()
+                    via_banner: (pageType === 'pdp') && viaBannerFlag(),
+                    sku: (pageType === 'pdp') ? skuFromPage() : null
                 };
             } catch (e) { return {}; }
         }
@@ -2926,7 +2935,7 @@
                 var slots = [];
                 for (var si = 0; si < t1.length && slots.length < 10; si++) {
                     if (t1[si].surface !== 'catalog-grid' && t1[si].surface !== 'search-results') continue;
-                    slots.push({ pos: slots.length + 1, sku: t1[si].sku || null, brand_id: t1[si].brand || null, placement: t1[si].sponsored ? 'sponsored' : 'organic' });
+                    slots.push({ slot_id: t0.render_id + '-' + (slots.length + 1), pos: slots.length + 1, sku: t1[si].sku || null, brand_id: t1[si].brand || null, placement: t1[si].sponsored ? 'sponsored' : 'organic' });
                 }
                 if (slots.length) payload.slots = slots;
             }
