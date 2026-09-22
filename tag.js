@@ -231,7 +231,10 @@
         function currentCartCount() {
             var el = document.querySelector('[data-cart-count]');
             var n = el ? parseInt(el.textContent, 10) : NaN;
-            return isNaN(n) ? null : n;
+            if (!isNaN(n)) return n;
+            // cart.html and checkout.html have no header badge — count the visible rows instead.
+            var rows = document.querySelectorAll('#cartItems article.cart-item, #cartItems .cart-item, [data-automation-id="cart-item"], #checkoutItems .mini-item');
+            return rows.length;
         }
         // Remember the cart size as the page is left, so the next cart page can tell whether it was emptied in between.
         window.addEventListener('pagehide', function () {
