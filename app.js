@@ -1353,6 +1353,16 @@ function initOrders() {
 }
 
 function refreshCartViews() { if (currentPage === 'cart.html') renderCart(); if (currentPage === 'checkout.html') { location.reload(); } }
+// Demo stand-in for the delivery region a real retailer's server would resolve
+// from the visitor's request (schema v3's `region`, distinct from the page's
+// own language). This is a placeholder using the visitor's own device
+// timezone — remove this block (and nothing else) once real IP-based
+// resolution is wired up; tag.js only reads whatever is here and needs no
+// change either way.
+try {
+  const regionGuess = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  if (regionGuess) document.body.dataset.region = regionGuess;
+} catch (e) { /* Intl unsupported — leave data-region unset */ }
 updateHeaderCounts(); initSearch(); initGlobalInteractions();
 if (currentPage === 'index.html' || currentPage === '') renderHome();
 if (currentPage === 'category.html') renderCatalog();

@@ -120,19 +120,19 @@
             } catch (e) { }
             return null;
         }
-        // Surface of the first page of the visit, limited to the schema's values: home, category or search (null otherwise).
+
+        // Page type of the first page of the visit (home / category / search / pdp / cart / checkout / other).
         function entrySurfaceFor(pageType) {
-            var mapped = pageType === 'homepage' ? 'home' : (pageType === 'category' || pageType === 'search') ? pageType : null;
+            var mapped = pageType === 'homepage' ? 'home' : (pageType || 'other');
             try {
                 if (window.sessionStorage) {
                     var s = window.sessionStorage.getItem('aiora_entry_surface');
-                    if (!s) { s = mapped || 'none'; window.sessionStorage.setItem('aiora_entry_surface', s); }
-                    return s === 'none' ? null : s;
+                    if (!s) { s = mapped; window.sessionStorage.setItem('aiora_entry_surface', s); }
+                    return s;
                 }
             } catch (e) { }
             return mapped;
         }
-
         // Page type of the first page of the visit (home / category / search / other).
         /* function entrySurfaceFor(pageType) {
              try {
@@ -154,11 +154,29 @@
 
         function detectBrowser() {
             var ua = (navigator.userAgent || '');
-            if (/Edg|OPR|Firefox|FxiOS/i.test(ua)) return 'other';
+            // Order matters: Edge, Opera and Samsung Internet all contain "Chrome"
+            // in their UA string, so they must be checked before Chrome itself.
+            if (/Edg\//i.test(ua)) return 'edge';
+            if (/OPR\/|Opera/i.test(ua)) return 'opera';
+            if (/SamsungBrowser/i.test(ua)) return 'samsung';
+            if (/Firefox|FxiOS/i.test(ua)) return 'firefox';
             if (/Chrome|CriOS/i.test(ua)) return 'chrome';
             if (/Safari/i.test(ua)) return 'safari';
             return 'other';
         }
+
+        // Every browser on iOS shares Safari's engine and storage limits, regardless
+        // of what it calls itself, so os is reported alongside (not instead of) browser.
+        function detectOS() {
+            var ua = (navigator.userAgent || '');
+            if (/iPhone|iPad|iPod/i.test(ua)) return 'ios';
+            if (/Android/i.test(ua)) return 'android';
+            if (/Windows/i.test(ua)) return 'windows';
+            if (/Macintosh|Mac OS X/i.test(ua)) return 'mac';
+            if (/Linux/i.test(ua)) return 'linux';
+            return 'other';
+        }
+
 
         // 32-bit FNV-1a of the trimmed, lower-cased text, as 8 hex characters.
         function hashText(text) {
@@ -201,7 +219,14 @@
             return null;
         }
         function viaBannerFlag() {
-            try { return window.sessionStorage.getItem('aiora_via_banner') === '1'; } catch (e) { return false; }
+            try { return window.sessionStorage.getItem('aiora_via_banner') || null; } catch (e) { return null; }
+        }
+        // Clears the via_banner trail on a search or a return to the homepage,
+        // so a click early in the visit doesn't tag every product page afterwards.
+        function clearViaBannerIfReset(pageType, hasQuery) {
+            if (pageType === 'homepage' || hasQuery) {
+                try { window.sessionStorage.removeItem('aiora_via_banner'); } catch (e) { }
+            }
         }
         function currentCartCount() {
             var el = document.querySelector('[data-cart-count]');
@@ -683,10 +708,11 @@
                 var surfaceId = crypto.randomUUID();
 
                 // 6. Region
-                var region = document.documentElement.lang || 'unknown';
-                // Interim, permission-free region hint (e.g. "Asia/Calcutta"); `region` above is unchanged.
-                var regionGuess = null;
-                try { regionGuess = Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch (e) { }
+                var pageLang = document.documentElement.lang || 'unknown';
+                // Real delivery region — not the page language. For now this reads
+                // data-region off <body>, which app.js sets as a demo stand-in for
+                // real IP-based resolution the backend will eventually do.
+                var region = (document.body && document.body.getAttribute('data-region')) || null;
 
                 // 7. Identity summary (Basic stub until we build Tier 5)
                 // --- NEW: IDENTITY EXTRACTION ---
@@ -703,7 +729,7 @@
                     if (balStr) identitySummary.loyalty_balance = parseInt(balStr, 10);
 
                     var hashStr = idEl.getAttribute('data-customer-hash');
-                    if (hashStr) identitySummary.customer_hash = hashStr;
+                    identitySummary.customer_hash = hashStr || null;
                     if (identitySummary.state === 'recognized') { try { window.sessionStorage.setItem('aiora_was_recognized', '1'); } catch (e) { } }
                 }
 
@@ -730,7 +756,7 @@
                 var visibleQuery = null;
                 var searchInput = firstMatch(document, FIELD_SEL.searchQueryInput);
                 if (searchInput && searchInput.value) visibleQuery = searchInput.value.trim();
-
+                clearViaBannerIfReset(pageType, !!visibleQuery);
 
                 return {
                     // Old Fields
@@ -748,8 +774,8 @@
                     breadcrumb: breadcrumbs,
                     viewport: viewport,
                     surface_id: surfaceId,
+                    page_lang: pageLang,
                     region: region,
-                    region_guess: regionGuess,
                     identity_summary: identitySummary,
                     recognized: identitySummary.state === 'recognized',
                     visible_query: visibleQuery,
@@ -759,11 +785,12 @@
                     entry_surface: entrySurfaceFor(pageType),
                     device: detectDevice(),
                     browser: detectBrowser(),
+                    os: detectOS(),
                     render_id: renderId,
                     query_hash: visibleQuery ? hashText(visibleQuery) : null,
                     category_id: categoryIdFromPage(),
                     claim_surface_id: claimSurfaceIdFromPage(),
-                    via_banner: (pageType === 'pdp') && viaBannerFlag(),
+                    via_banner: (pageType === 'pdp') ? viaBannerFlag() : null,
                     sku: (pageType === 'pdp') ? skuFromPage() : null
                 };
             } catch (e) { return {}; }
@@ -3093,7 +3120,11 @@
             if (parsedOrder) {
                 orderData.order_total_displayed = parsedOrder.amount;
                 orderData.order_currency = parsedOrder.currency;
-                orderData.order_value = parsedOrder.amount;
+                // Merchandise value after discounts, excluding delivery (Shopora has no tax line).
+                var orderDeliveryEl = firstMatch(document, FIELD_SEL.checkoutDelivery);
+                var orderDeliveryParsed = orderDeliveryEl ? parsePrice(orderDeliveryEl.textContent) : null;
+                var orderDeliveryAmt = orderDeliveryParsed ? orderDeliveryParsed.amount : 0;
+                orderData.order_value = +(parsedOrder.amount - orderDeliveryAmt).toFixed(2);
 
             }
             orderData.line_item_count = document.querySelectorAll('#checkoutItems .mini-item, #checkoutItems li, .order-item').length;
@@ -3213,7 +3244,20 @@
                     var items = document.querySelectorAll('#checkoutItems .mini-item, #checkoutItems li, .order-item');
                     orderData.line_item_count = items.length;*/
 
-                    pushEvent("purchase_completed", readOrderData(), true); // Flush immediately!
+                    var orderPayloadData = readOrderData();
+                    // A submit with nothing in the checkout summary is never a real order — this is
+                    // what actually catches a double-click, since the site regenerates a fresh (but
+                    // unused) order id on every submit regardless of whether the cart was empty.
+                    var hasRealOrder = orderPayloadData.line_item_count > 0;
+                    // Backstop: also skip an exact repeat of the last order_id already sent.
+                    var lastOrderIdSent = null;
+                    try { lastOrderIdSent = window.sessionStorage.getItem('aiora_last_order_id'); } catch (dupErr) { }
+                    var isRepeat = orderPayloadData.order_id && orderPayloadData.order_id === lastOrderIdSent;
+                    if (hasRealOrder && !isRepeat) {
+                        if (orderPayloadData.order_id) { try { window.sessionStorage.setItem('aiora_last_order_id', orderPayloadData.order_id); } catch (dupErr2) { } }
+                        pushEvent("purchase_completed", orderPayloadData, true); // Flush immediately!
+                    }
+
                     // Full checkout payload at the moment of the order, before the site empties the cart.
                     try {
                         orderSubmitSnapshot = true;
@@ -3269,10 +3313,11 @@
                 if (!target) return;
                 // Layer 1: remember a banner / hero link click so later product pages report via_banner.
                 var bannerLink = target.closest('a');
-                if (bannerLink && bannerLink.closest('.promo-banner, .hero, [data-module-type="banner"], [data-module-type="hero"], [data-module-type="promo"]')) {
-                    try { window.sessionStorage.setItem('aiora_via_banner', '1'); } catch (bannerErr) { }
+                var bannerEl = bannerLink && bannerLink.closest('.promo-banner, .hero, [data-module-type="banner"], [data-module-type="hero"], [data-module-type="promo"]');
+                if (bannerEl) {
+                    var clickedSurfaceId = bannerEl.getAttribute('data-claim-surface-id') || 'unknown';
+                    try { window.sessionStorage.setItem('aiora_via_banner', clickedSurfaceId); } catch (bannerErr) { }
                 }
-
 
                 /*---old---
                 // ================================================================

@@ -64,19 +64,42 @@ export default async function handler(req, res) {
 
       // Save to Supabase database
       if (supabase) {
-        const { error } = await supabase.from('events').insert([
-          {
-            client_id: payload.client_id,
-            // The tag sends session_id (schema v3); older rows used session_token. The column name is unchanged.
-            session_token: payload.session_id || payload.session_token || null,
-            page_url: payload.page?.page_url || 'unknown',
-            payload: payload
-          }
-        ]);
-        if (error) {
-          console.error('\n⚠️  Supabase Insert Error:', error.message);
+        // De-duplicate on beacon_id (page payloads) / flush_id (interaction-event
+        // envelopes) — sendBeacon or its fetch fallback can occasionally deliver
+        // the same payload twice; skip the repeat instead of storing it again.
+        const dedupeId = payload.beacon_id || payload.flush_id || null;
+        let isDuplicate = false;
+        if (dedupeId) {
+          const { data: existing, error: dupeError } = await supabase
+            .from('events')
+            .select('id')
+            .or(`payload->>beacon_id.eq.${dedupeId},payload->>flush_id.eq.${dedupeId}`)
+            .limit(1);
+          if (dupeError) console.error('\n⚠️  Supabase dedupe check error:', dupeError.message);
+          isDuplicate = !dupeError && existing && existing.length > 0;
+        }
+
+        if (isDuplicate) {
+          console.log(`\n↩️  Duplicate beacon (${dedupeId}) — already stored, skipping insert.`);
         } else {
-          console.log('\n✅  Successfully saved to Supabase!');
+          // received_ts is the collector's own clock, stamped on arrival — kept
+          // alongside the tag's own ts/timestamp, which reflects the visitor's
+          // (not always trustworthy) device clock.
+          const storedPayload = Object.assign({}, payload, { received_ts: new Date().toISOString() });
+          const { error } = await supabase.from('events').insert([
+            {
+              client_id: payload.client_id,
+              // The tag sends session_id (schema v3); older rows used session_token. The column name is unchanged.
+              session_token: payload.session_id || payload.session_token || null,
+              page_url: payload.page?.page_url || 'unknown',
+              payload: storedPayload
+            }
+          ]);
+          if (error) {
+            console.error('\n⚠️  Supabase Insert Error:', error.message);
+          } else {
+            console.log('\n✅  Successfully saved to Supabase!');
+          }
         }
       } else {
         console.log('\n⚠️  Supabase keys not found in Environment Variables. Skipping DB insert.');
