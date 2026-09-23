@@ -224,7 +224,7 @@ function buildProductCard(product, template, badgeOverride) {
   const card = template.content.firstElementChild.cloneNode(true);
   applyVisual(card.querySelector('.product-image'), product);
   card.dataset.productId = product.id;
-  card.dataset.brand = product.name.split(' ')[0];
+  card.dataset.brand = product.brand;
   card.dataset.category = product.category;
   card.dataset.sponsored = 'false';
   card.dataset.availability = product.availability || 'in-stock';
@@ -245,7 +245,7 @@ function buildProductCard(product, template, badgeOverride) {
     wrapper.appendChild(label);
     wrapper.appendChild(discountBadge);
   }
-  card.querySelector('.product-brand').textContent = product.name.split(' ')[0];
+  card.querySelector('.product-brand').textContent = product.brand;
   card.querySelector('h3').textContent = product.name;
   card.querySelector('.stars').textContent = product.rating.toFixed(1) + ' ★';
   card.querySelector('.rating-count').textContent = ratingCount(product).toLocaleString('en-IN');
@@ -798,7 +798,7 @@ function renderPDP() {
   const discountPercent = discount(product);
   const retailP = retailPrice(product);
   const oldP = retailOldPrice(product);
-  const brandName = product.name.split(' ')[0];
+  const brandName = product.brand;
 
   const html = `
     <style>
