@@ -875,6 +875,7 @@ function renderPDP() {
             ${money(oldP)}
           </del>
         </div>
+        ${product.id === 'el-1' ? `<p class="price-exclusion-note" style="font-size:0.75rem;color:var(--muted);margin:-8px 0 15px;">Excluded from category promo — new model.</p>` : ''}
 
         <!-- Variants -->
         <div style="margin-bottom: 15px;">
