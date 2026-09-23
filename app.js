@@ -213,7 +213,14 @@ function applyVisual(node, product) {
   node.style.setProperty('--sprite-x', (index % 5) * 25 + '%');
   node.style.setProperty('--sprite-y', Math.floor(index / 5) * 50 + '%');
 }
-function buildProductCard(product, template) {
+// badgeOverride (optional): { sku, percent } — used only by the electronics
+// category grid, only for the one sku it names. Recalculates the badge %
+// and the tile's displayed price off the product's own real oldPrice, but
+// leaves `product` itself untouched — addToCart(product.id) and the PDP
+// both read the real product record directly, so this is purely a category-
+// tile display mismatch (the category page's own claim isn't honored by
+// Add to Cart or the PDP for that same product), not a data change.
+function buildProductCard(product, template, badgeOverride) {
   const card = template.content.firstElementChild.cloneNode(true);
   applyVisual(card.querySelector('.product-image'), product);
   card.dataset.productId = product.id;
@@ -221,7 +228,9 @@ function buildProductCard(product, template) {
   card.dataset.category = product.category;
   card.dataset.sponsored = 'false';
   card.dataset.availability = product.availability || 'in-stock';
-  card.querySelector('.discount-badge').textContent = discount(product) + '% OFF';
+  const useBadgeOverride = badgeOverride && badgeOverride.sku === product.id;
+  const badgePercent = useBadgeOverride ? badgeOverride.percent : discount(product);
+  card.querySelector('.discount-badge').textContent = badgePercent + '% OFF';
   if (product.bogo) {
     // "Buy One Get One Free" badge, grouped with the discount badge (same markup the BOGO demo scenario uses).
     card.dataset.bogo = 'true';
@@ -241,9 +250,12 @@ function buildProductCard(product, template) {
   card.querySelector('.stars').textContent = product.rating.toFixed(1) + ' ★';
   card.querySelector('.rating-count').textContent = ratingCount(product).toLocaleString('en-IN');
   card.querySelector('.product-meta').textContent = product.description;
-  card.querySelector('.price-stack strong').textContent = money(retailPrice(product));
+  const displayedPrice = useBadgeOverride
+    ? +(retailOldPrice(product) * (1 - badgePercent / 100)).toFixed(2)
+    : retailPrice(product);
+  card.querySelector('.price-stack strong').textContent = money(displayedPrice);
   card.querySelector('.price-stack del').textContent = money(retailOldPrice(product));
-  card.querySelector('.price-stack span').textContent = 'Save ' + money(retailOldPrice(product) - retailPrice(product));
+  card.querySelector('.price-stack span').textContent = 'Save ' + money(retailOldPrice(product) - displayedPrice);
   const navigateToPDP = (e) => {
     if (e.target.closest('.wishlist-button, .add-to-cart, .quick-view')) return;
     e.preventDefault();
@@ -403,8 +415,13 @@ function renderCatalog() {
     document.querySelector('#resultsHeading').textContent = headingText;
 
     const saleBanner = document.querySelector('#categorySaleBanner');
+    // Hoisted so the grid-render call below can gate the VoltMax Laptop Pro
+    // tile's fake 40%-off badge on the exact same condition that shows the
+    // real banner making that 40% claim — the tile only appears to "prove"
+    // the banner's number when the banner is actually there to make it.
+    let showSaleBanner = false;
     if (saleBanner) {
-      const showSaleBanner = activeCategory === 'electronics' && !term && !dealOnly && !new URLSearchParams(location.search).has('demo');
+      showSaleBanner = activeCategory === 'electronics' && !term && !dealOnly && !new URLSearchParams(location.search).has('demo');
       saleBanner.hidden = !showSaleBanner;
       saleBanner.style.display = showSaleBanner ? 'flex' : 'none';
       const saleThumbs = saleBanner.querySelector('#categorySaleThumbs');
@@ -426,7 +443,8 @@ function renderCatalog() {
       : `Quality picks across ${categoryName.toLowerCase()}.`;
     document.querySelector('#resultsSubheading').textContent = subheadingText;
     grid.innerHTML = '';
-    filtered.forEach((product) => grid.appendChild(buildProductCard(product, template)));
+    const voltmaxBadgeOverride = showSaleBanner ? { sku: 'el-1', percent: 40 } : null;
+    filtered.forEach((product) => grid.appendChild(buildProductCard(product, template, voltmaxBadgeOverride)));
     empty.hidden = filtered.length !== 0;
     grid.hidden = filtered.length === 0;
   }
