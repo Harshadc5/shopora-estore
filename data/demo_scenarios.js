@@ -472,8 +472,14 @@ export const demoScenarios = {
                 { "sku": "el-1", "badge": "25% OFF", "price": 1349.99 }
             ]
         },
+        // Only the VoltMax Laptop Pro tile (el-1) routes to the override
+        // PDP below — every other tile keeps its normal, un-overridden
+        // link. See attachClickThrough()'s comment in demo_router.js for
+        // why: promise-gap-destination's fixed override price/badge only
+        // reads correctly against el-1's own real "was" price.
         "clickThrough": {
-            "destinationSlug": "promise-gap-destination"
+            "destinationSlug": "promise-gap-destination",
+            "skus": ["el-1"]
         }
     },
     "promise-gap-destination": {
