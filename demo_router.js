@@ -7,7 +7,7 @@ import { demoCustomerHash } from './data/customer.js';
 // versioned separately from this file's own <script> tag ?v= — bump this
 // whenever demo_scenarios.js content changes, so edits can't get stuck
 // behind a stale cached copy.
-import { demoScenarios } from './data/demo_scenarios.js?v=35';
+import { demoScenarios } from './data/demo_scenarios.js?v=36';
 
 function money(n) {
     return '$' + Number(n).toFixed(2);
@@ -149,9 +149,21 @@ function attachDemoNavRouting(demoSlug, overrides, carryForward) {
 }
 
 // Generic click-through override: while this scenario is active, clicking
-// ANY product tile on the page navigates to that tile's own SKU on the
-// destination demo slug (./pdp.html?sku=<clicked-sku>&demo=<destinationSlug>)
-// instead of app.js's default ?id=<sku> link with no demo param.
+// a product tile navigates to that tile's own SKU on the destination demo
+// slug (./pdp.html?sku=<clicked-sku>&demo=<destinationSlug>) instead of
+// app.js's default ?id=<sku> link with no demo param.
+//
+// config.skus (optional): if given, only tiles whose sku is in this list
+// are click-through'd — every other tile falls through to app.js's real,
+// un-overridden click handling. Used by category-promise-gap (4.1): the
+// destination PDP override (renderPdpOverride) only swaps the new price,
+// not the struck-through "was" price, so it was only ever tuned to read
+// right against el-1's (VoltMax Laptop Pro) own real oldPrice. Routing
+// every other tile through the same fixed override collided with THEIR
+// unrelated real oldPrice (e.g. IronCore showing "$1619.99, was $119.99"),
+// which read as a broken/nonsensical price rather than the intended
+// "category promised X% off, this PDP doesn't honor it" gap. Omit
+// config.skus to keep the old any-tile behavior.
 //
 // This listens on `window` (the earliest possible point in the capturing
 // phase — even before `document`) with capture:true, so it always runs
@@ -161,13 +173,14 @@ function attachDemoNavRouting(demoSlug, overrides, carryForward) {
 // stored element reference), so it keeps working even if the grid re-renders
 // after this listener is attached.
 function attachClickThrough(config) {
-    console.warn(`[AIORA DEMO] click-through armed -> any tile redirects to ?sku=<sku>&demo=${config.destinationSlug}`);
+    console.warn(`[AIORA DEMO] click-through armed -> ${config.skus ? config.skus.join(',') : 'any'} tile(s) redirect to ?sku=<sku>&demo=${config.destinationSlug}`);
     window.addEventListener('click', (e) => {
         const card = e.target.closest('[data-product-id]');
         if (!card) return;
         if (e.target.closest('.wishlist-button, .add-to-cart, .quick-view')) return;
         const sku = card.dataset.productId;
         if (!sku) return;
+        if (config.skus && !config.skus.includes(sku)) return;
         const destination = `./pdp.html?sku=${encodeURIComponent(sku)}&demo=${encodeURIComponent(config.destinationSlug)}`;
         console.warn(`[AIORA DEMO] click-through firing for sku="${sku}" -> ${destination}`);
         e.preventDefault();
