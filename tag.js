@@ -588,12 +588,12 @@
             var p = (path || '').toLowerCase();
             if (p.includes('/cart')) return 'cart';
             if (p.includes('/checkout')) return 'checkout';
+            if (p.includes('/orders')) return 'orders';
             if (p.includes('/search')) return 'search';
             if (p.includes('/product') || p.includes('/p/') || p.includes('/pdp')) return 'pdp';
             if (p === '/' || p.includes('/home')) return 'homepage';
             return 'category';
         }
-
         function classifyPageTypeFromTitle(title) {
             var t = (title || '').toLowerCase();
             if (t.includes('cart') || t.includes('bag')) return 'cart';
@@ -2862,6 +2862,7 @@
             checkout: [0, 1, 2, 4, 5, 6],
             pdp: [0, 1, 2, 4, 5, 6, 8, 9],
             search: [0, 1, 3, 4, 5, 6, 7, 8],
+            orders: [0, 4, 5],
             other: [0, 4, 5],
         };
 
