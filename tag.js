@@ -425,10 +425,21 @@
 
                     isReadyToFire = hasFoundItems && hasFoundTotal && heroIsReal;
                 }
+
                 // Grid Pages (Search, Category, Homepage) Checklist
                 else if (pageType === 'search' || pageType === 'category' || pageType === 'homepage') {
                     if (firstMatch(document, CARD_SELECTORS)) hasFoundItems = true;
                     if (document.querySelector('.no-results, .zero-results, .empty-search')) hasFoundEmptyState = true;
+
+                    isReadyToFire = hasFoundItems || hasFoundEmptyState;
+                }
+                // Orders Page Checklist — app.js's initOrders() injects order
+                // cards (or the empty state) asynchronously via a module
+                // script; wait for one of those instead of firing before
+                // app.js has run (which also sets data-region on <body>).
+                else if (pageType === 'orders') {
+                    if (document.querySelector('#ordersContainer .order-card')) hasFoundItems = true;
+                    if (document.querySelector('.empty-orders')) hasFoundEmptyState = true;
 
                     isReadyToFire = hasFoundItems || hasFoundEmptyState;
                 }
