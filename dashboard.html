@@ -932,6 +932,12 @@
         if (pageType === 'interaction_events') return q.eq('payload->>envelope_type', 'interaction_events');
         // The tag now reports the homepage as 'home'; older stored rows say 'homepage'.
         if (pageType === 'homepage') return q.in('payload->page->>page_type', ['homepage', 'home']);
+        // No dedicated wishlist page_type exists (see pageTypeLabel above) —
+        // wishlist rows are still stored as page_type: 'category' with
+        // ?wishlist=true in the URL, so filter on that combination instead.
+        if (pageType === 'wishlist') {
+          return q.eq('payload->page->>page_type', 'category').like('payload->page->>page_url', '%wishlist=true%');
+        }
         return q.eq('payload->page->>page_type', pageType);
       }
 
@@ -1068,7 +1074,13 @@
           .channel('events-live-feed')
           .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'events' }, (payload) => {
             const pageType = pageTypeSelect.value;
-            if (pageType && pageTypeFromPayload(payload.new.payload || {}) !== pageType) return;
+            const rowPageType = pageTypeFromPayload(payload.new.payload || {});
+            if (pageType === 'wishlist') {
+              const pageUrl = (payload.new.payload && payload.new.payload.page && payload.new.payload.page.page_url) || '';
+              if (rowPageType !== 'category' || !/[?&]wishlist=true\b/.test(pageUrl)) return;
+            } else if (pageType && rowPageType !== pageType) {
+              return;
+            }
             addRow(payload.new, true);
             refreshDbTotal();
             refreshUniqueSessions();
