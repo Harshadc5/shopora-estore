@@ -851,7 +851,7 @@
             cartDelivery: ['#summaryDelivery'],
             cartMarkdown: ['#markdownAmt'],
             cartTax: ['.summary-tax', '#summaryTax', '[data-automation-id="summaryTax"]'],
-            cartPromotions: ['.cart-discount', '.promo-applied', '[data-automation-id="appliedPromotion"]', '#promoRow'],
+            cartPromotions: ['.cart-discount', '.promo-applied', '[data-automation-id="appliedPromotion"]', '#promoRow', '#promoRow2'],
             cartShippingThreshold: ['.shipping-threshold', '#shippingProgress', '.shipping-progress'],
             cartLoyalty: ['.loyalty-discount', '[data-automation-id="loyaltyDiscount"]', '#plusMemberRow'],
             // --- NEW TIER 2 ADDITIONS --- w.r.t Canonical Signal Schema
@@ -877,7 +877,7 @@
             checkoutTax: ['#checkoutTax', '[data-automation-id="salesTaxTotal"]'],
             checkoutOrderButton: ['#placeOrderButton', '.place-order', '[data-automation-id="checkoutButton"]'],
             checkoutLoyalty: ['#coPlusMemberRow', '[data-automation-id="loyaltyDiscount"]'],
-            checkoutPromotions: ['#checkoutPromoRow', '.promo-applied', '[data-automation-id="appliedPromotion"]'],
+            checkoutPromotions: ['#checkoutPromoRow', '#checkoutPromoRow2', '.promo-applied', '[data-automation-id="appliedPromotion"]'],
             checkoutSavings: ['#checkoutSavings'],
             checkoutItemQuantity: ['small', '[class*="qty"]'],  // <--- ADDED THIS LINE
 

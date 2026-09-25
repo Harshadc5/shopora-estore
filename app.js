@@ -25,23 +25,42 @@ const wishlist = new Set(loadJSON(WISHLIST_KEY, []));
 // Promo lives in sessionStorage, not localStorage — it should survive normal
 // page navigation within a visit (cart -> checkout) but be wiped the moment
 // the tab actually closes, unlike the cart/wishlist which persist for real.
+// Stored as an array of up to MAX_PROMO_CODES codes, stacked (summed off the
+// same subtotal, not compounded) — same convention already used for markdown
+// + code + loyalty amounts elsewhere in this file.
+const MAX_PROMO_CODES = 2;
 function loadPromo() {
-  try { return JSON.parse(sessionStorage.getItem(PROMO_KEY)) ?? null; } catch { return null; }
+  try {
+    const v = JSON.parse(sessionStorage.getItem(PROMO_KEY));
+    if (Array.isArray(v)) return v.filter((c) => typeof c === 'string');
+    if (typeof v === 'string') return [v]; // migrate an old single-code session value
+    return [];
+  } catch { return []; }
 }
-let activePromo = loadPromo();
+let activePromos = loadPromo();
 const currentPage = location.pathname.split('/').pop() || 'index.html';
 
 function applyPromo(code, page) {
   const normalized = code.trim().toUpperCase();
   if (!normalized) return;
   if (!PROMO_CODES[normalized]) {
-    showPromoRejected(normalized);
+    showPromoRejected(normalized, 'Invalid code. Please try again.');
     toast('Invalid promo code.', 'error');
     return;
   }
+  if (activePromos.includes(normalized)) {
+    showPromoRejected(normalized, 'That code is already applied.');
+    toast('That code is already applied.', 'error');
+    return;
+  }
+  if (activePromos.length >= MAX_PROMO_CODES) {
+    showPromoRejected(normalized, `Only ${MAX_PROMO_CODES} promo codes can be combined.`);
+    toast(`Only ${MAX_PROMO_CODES} promo codes can be combined.`, 'error');
+    return;
+  }
   clearPromoRejected();
-  activePromo = normalized;
-  sessionStorage.setItem(PROMO_KEY, JSON.stringify(activePromo));
+  activePromos = [...activePromos, normalized];
+  sessionStorage.setItem(PROMO_KEY, JSON.stringify(activePromos));
   toast('Promo code applied!', 'success');
   if (page === 'cart') renderCart();
   if (page === 'checkout') renderCheckout();
@@ -62,7 +81,7 @@ function clearPromoRejected() {
   const next = group.nextElementSibling;
   if (next && next.classList.contains('promo-error')) next.remove();
 }
-function showPromoRejected(code) {
+function showPromoRejected(code, messageText) {
   const group = promoFieldGroup();
   if (!group) return;
   clearPromoRejected();
@@ -72,22 +91,23 @@ function showPromoRejected(code) {
   message.className = 'promo-error';
   message.setAttribute('role', 'alert');
   message.style.cssText = 'color:#b42318;font-size:0.8rem;margin:0.25rem 0 0.5rem;';
-  message.textContent = 'Invalid code. Please try again.';
+  message.textContent = messageText || 'Invalid code. Please try again.';
   group.insertAdjacentElement('afterend', message);
 }
 
-function removePromo(page) {
+function removePromo(page, code) {
   clearPromoRejected();
-  activePromo = null;
-  sessionStorage.removeItem(PROMO_KEY);
+  activePromos = code ? activePromos.filter((c) => c !== code) : [];
+  if (activePromos.length) sessionStorage.setItem(PROMO_KEY, JSON.stringify(activePromos));
+  else sessionStorage.removeItem(PROMO_KEY);
   toast('Promo code removed.', 'success');
   if (page === 'cart') renderCart();
   if (page === 'checkout') renderCheckout();
 }
 
-function calculatePromoDiscount(subtotal, delivery) {
-  if (!activePromo || !PROMO_CODES[activePromo]) return 0;
-  const promo = PROMO_CODES[activePromo];
+function promoDiscountFor(code, subtotal, delivery) {
+  const promo = PROMO_CODES[code];
+  if (!promo) return 0;
   // Enforce minimum order threshold if one exists
   if (promo.min_order && subtotal < promo.min_order) return 0;
   // Calculate the discount based on the type
@@ -96,7 +116,34 @@ function calculatePromoDiscount(subtotal, delivery) {
   if (promo.type === 'freeship') return delivery;
   return 0;
 }
+function calculatePromoDiscount(subtotal, delivery) {
+  return activePromos.reduce((sum, code) => sum + promoDiscountFor(code, subtotal, delivery), 0);
+}
 
+// Renders one promo "slot" (a code chip + its remove button) into a static
+// row of matching ids — used twice per page (slot 1 / slot 2) so up to
+// MAX_PROMO_CODES codes can show stacked at once. refs: {row, name, desc,
+// amt, removeBtn}. removeBtn.onclick is reassigned every render (not guarded
+// with a one-time addEventListener) because which code sits in which slot
+// can change between renders — e.g. removing slot 1's code shifts slot 2's
+// code up, so the closure has to capture the current code each time.
+function renderPromoSlot(refs, code, discountAmt, page) {
+  if (!refs.row) return;
+  if (code && discountAmt > 0) {
+    refs.row.hidden = false;
+    refs.row.style.display = 'flex';
+    refs.row.dataset.discountType = 'code';
+    if (refs.name) refs.name.textContent = code;
+    const promo = PROMO_CODES[code];
+    if (refs.desc) refs.desc.textContent = promo ? (promo.type === 'percent' ? ` code (${promo.value}% off)` : ` code (${money(promo.value)} off)`) : ' code';
+    if (refs.amt) refs.amt.textContent = '-' + money(discountAmt);
+    if (refs.removeBtn) refs.removeBtn.onclick = () => removePromo(page, code);
+  } else {
+    refs.row.hidden = true;
+    refs.row.style.display = 'none';
+    delete refs.row.dataset.discountType;
+  }
+}
 
 function loadJSON(key, fallback) {
   try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
@@ -129,8 +176,8 @@ function saveCart() {
   // over into whatever gets added next is exactly the stale-state confusion
   // this is meant to prevent.
   if (Object.keys(cart).length === 0) { try { localStorage.removeItem(FULL_PRICE_KEY); } catch (e) { /* ignore */ } }
-  if (Object.keys(cart).length === 0 && activePromo) {
-    activePromo = null;
+  if (Object.keys(cart).length === 0 && activePromos.length) {
+    activePromos = [];
     sessionStorage.removeItem(PROMO_KEY);
   }
   updateHeaderCounts();
@@ -492,32 +539,25 @@ function renderCart() {
     }
   }
 
-  const promoRow = document.querySelector('#promoRow');
-  // data-applied-code lives on the promo field's own wrapper, not the row —
+  // data-applied-code lives on the promo field's own wrapper, not a row —
   // tag.js reads it via promoInput.closest('[data-applied-code]'), mirroring
   // the convention demo_router.js's applyPromoOverride already established.
+  // With up to 2 stacked codes, this is now a comma-separated list, e.g.
+  // "WELCOME10,SAVE20", when 2 are applied.
   const promoFieldWrap = document.querySelector('#promoInput') && document.querySelector('#promoInput').parentElement;
-  if (promoRow) {
-    if (activePromo && promoDiscount > 0) {
-      promoRow.style.display = 'flex';
-      promoRow.dataset.discountType = 'code';
-      document.querySelector('#promoCodeName').textContent = activePromo;
-      const promo = PROMO_CODES[activePromo];
-      const promoDescEl = document.querySelector('#promoDesc');
-      if (promoDescEl) promoDescEl.textContent = promo ? (promo.type === 'percent' ? ` code (${promo.value}% off)` : ` code (${money(promo.value)} off)`) : ' code';
-      document.querySelector('#summaryPromo').textContent = '-' + money(promoDiscount);
-      if (promoFieldWrap) promoFieldWrap.setAttribute('data-applied-code', activePromo);
-      const removeBtn = document.querySelector('#removePromoBtn');
-      if (removeBtn && !removeBtn.hasAttribute('data-bound')) {
-        removeBtn.setAttribute('data-bound', 'true');
-        removeBtn.addEventListener('click', () => removePromo('cart'));
-      }
-    } else {
-      promoRow.style.display = 'none';
-      delete promoRow.dataset.discountType;
-      if (promoFieldWrap) promoFieldWrap.removeAttribute('data-applied-code');
-    }
+  if (activePromos.length && promoDiscount > 0) {
+    if (promoFieldWrap) promoFieldWrap.setAttribute('data-applied-code', activePromos.join(','));
+  } else if (promoFieldWrap) {
+    promoFieldWrap.removeAttribute('data-applied-code');
   }
+  renderPromoSlot(
+    { row: document.querySelector('#promoRow'), name: document.querySelector('#promoCodeName'), desc: document.querySelector('#promoDesc'), amt: document.querySelector('#summaryPromo'), removeBtn: document.querySelector('#removePromoBtn') },
+    activePromos[0], activePromos[0] ? promoDiscountFor(activePromos[0], subtotal, delivery) : 0, 'cart'
+  );
+  renderPromoSlot(
+    { row: document.querySelector('#promoRow2'), name: document.querySelector('#promoCodeName2'), desc: document.querySelector('#promoDesc2'), amt: document.querySelector('#summaryPromo2'), removeBtn: document.querySelector('#removePromoBtn2') },
+    activePromos[1], activePromos[1] ? promoDiscountFor(activePromos[1], subtotal, delivery) : 0, 'cart'
+  );
 
   // Shopora Plus 5% member discount row in cart summary
   var _cartP = new URLSearchParams(window.location.search);
@@ -636,33 +676,25 @@ function renderCheckout() {
       }
     }
 
-    const promoRow = document.querySelector('#checkoutPromoRow');
     // Same convention as the cart: data-applied-code sits on the promo
     // field's own wrapper, and data-discount-type on the savings row only
     // while it is shown (tag.js reads a detached copy, so a row that is
-    // merely display:none would still be read).
+    // merely display:none would still be read). Comma-separated when 2
+    // codes are stacked, e.g. "WELCOME10,SAVE20".
     const coPromoWrap = document.querySelector('#checkoutPromoInput') && document.querySelector('#checkoutPromoInput').parentElement;
-    if (promoRow) {
-      if (activePromo && promoDiscount > 0) {
-        promoRow.style.display = 'flex';
-        promoRow.dataset.discountType = 'code';
-        document.querySelector('#checkoutPromoName').textContent = activePromo;
-        const coPromo = PROMO_CODES[activePromo];
-        const coPromoDescEl = document.querySelector('#checkoutPromoDesc');
-        if (coPromoDescEl) coPromoDescEl.textContent = coPromo ? (coPromo.type === 'percent' ? ` code (${coPromo.value}% off)` : ` code (${money(coPromo.value)} off)`) : ' code';
-        document.querySelector('#checkoutPromo').textContent = '-' + money(promoDiscount);
-        if (coPromoWrap) coPromoWrap.setAttribute('data-applied-code', activePromo);
-        const removeBtn = document.querySelector('#removeCheckoutPromoBtn');
-        if (removeBtn && !removeBtn.hasAttribute('data-bound')) {
-          removeBtn.setAttribute('data-bound', 'true');
-          removeBtn.addEventListener('click', () => removePromo('checkout'));
-        }
-      } else {
-        promoRow.style.display = 'none';
-        delete promoRow.dataset.discountType;
-        if (coPromoWrap) coPromoWrap.removeAttribute('data-applied-code');
-      }
+    if (activePromos.length && promoDiscount > 0) {
+      if (coPromoWrap) coPromoWrap.setAttribute('data-applied-code', activePromos.join(','));
+    } else if (coPromoWrap) {
+      coPromoWrap.removeAttribute('data-applied-code');
     }
+    renderPromoSlot(
+      { row: document.querySelector('#checkoutPromoRow'), name: document.querySelector('#checkoutPromoName'), desc: document.querySelector('#checkoutPromoDesc'), amt: document.querySelector('#checkoutPromo'), removeBtn: document.querySelector('#removeCheckoutPromoBtn') },
+      activePromos[0], activePromos[0] ? promoDiscountFor(activePromos[0], subtotal, delivery) : 0, 'checkout'
+    );
+    renderPromoSlot(
+      { row: document.querySelector('#checkoutPromoRow2'), name: document.querySelector('#checkoutPromoName2'), desc: document.querySelector('#checkoutPromoDesc2'), amt: document.querySelector('#checkoutPromo2'), removeBtn: document.querySelector('#removeCheckoutPromoBtn2') },
+      activePromos[1], activePromos[1] ? promoDiscountFor(activePromos[1], subtotal, delivery) : 0, 'checkout'
+    );
 
     // Shopora Plus 5% member discount row
     const _coParams = new URLSearchParams(window.location.search);

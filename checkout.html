@@ -153,6 +153,13 @@
                                                         id="removeCheckoutPromoBtn" class="text-button"
                                                         style="color:var(--red); font-size:0.65rem; padding:0; margin-left:0.25rem;">Remove</button></span><strong
                                                 id="checkoutPromo" class="promo-amount">-$0.00</strong></div>
+                                <!-- Second stacked promo code slot (up to 2 codes at once) — same shape as checkoutPromoRow. -->
+                                <div class="summary-row savings" id="checkoutPromoRow2" hidden><span><span
+                                                        id="checkoutPromoName2" class="promo-name"></span><span
+                                                        id="checkoutPromoDesc2"></span> <button
+                                                        id="removeCheckoutPromoBtn2" class="text-button"
+                                                        style="color:var(--red); font-size:0.65rem; padding:0; margin-left:0.25rem;">Remove</button></span><strong
+                                                id="checkoutPromo2" class="promo-amount">-$0.00</strong></div>
                         </div>
                         <div class="summary-row savings" id="checkoutSavingsRow"><span>Total savings</span><strong id="checkoutSavings"
                                         style="font-weight:700">$0.00</strong></div>
@@ -175,7 +182,7 @@
         <script type="module" src="./app.js?v=42"></script>
         <script type="module" src="./demo_router.js?v=58"></script>
         <!-- AIORA JS Tag — coordination failure signal collector -->
-        <script src="tag.js?v=1" data-client-id="shopora-prod" data-endpoint="/api/collect"
+        <script src="tag.js?v=2" data-client-id="shopora-prod" data-endpoint="/api/collect"
                 data-sampling-rate="1.0" async></script>
 
 
