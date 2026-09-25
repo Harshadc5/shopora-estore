@@ -16,7 +16,8 @@ const PROMO_CODES = {
   'WELCOME10': { type: 'percent', value: 10 },
   'SAVE20': { type: 'percent', value: 20 },
   'SAVE50': { type: 'flat', value: 30, min_order: 200 },
-  'MEMBER5': { type: 'percent', value: 5 }
+  'MEMBER5': { type: 'percent', value: 5 },
+  'SHOP100': { type: 'percent', value: 10 }
 };
 
 const cart = loadCart();
@@ -1138,7 +1139,11 @@ function initIdentity() {
         currentUrl.searchParams.delete('identity');
         currentUrl.searchParams.delete('member_tier');
       } else {
+        // Going to logged-in: set BOTH identity AND member_tier in one click —
+        // previously only identity was set, leaving member_tier to be added
+        // by hand for a Plus member to actually show as Plus.
         currentUrl.searchParams.set('identity', 'logged-in');
+        currentUrl.searchParams.set('member_tier', 'plus');
       }
       window.location.href = currentUrl.toString();
     });
