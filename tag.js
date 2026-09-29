@@ -3041,7 +3041,7 @@
         // NEW: We track the sequence globally so Payload 2 gets sequence_no: 2
         var globalSequenceNo = 1;
 
-        function sendPayload(payload) {
+        /*function sendPayload(payload) {
             // OVERRIDE the sequence number right before sending!
             payload.sequence_no = globalSequenceNo++;
 
@@ -3055,7 +3055,25 @@
             if (!queued) {
                 console.warn('[AIORA] sendBeacon returned false. Beacon was not queued.');
             }
+        }*/
+        function sendPayload(payload) {
+            // OVERRIDE the sequence number right before sending!
+            payload.sequence_no = globalSequenceNo++;
+
+            const payloadString = JSON.stringify(payload);
+            const blob = new Blob([payloadString], { type: 'text/plain' });
+
+            const queued = navigator.sendBeacon(config.endpoint, blob);
+            if (!queued) {
+                console.warn('[AIORA] sendBeacon returned false. Beacon was not queued.');
+            }
+
+            // Dual-send: also mirror to Supabase so dashboard.html stays live.
+            try {
+                navigator.sendBeacon('/api/collect', new Blob([payloadString], { type: 'text/plain' }));
+            } catch (e) { }
         }
+
 
         // ================================================================
         // SECTION 15 — MAIN EXECUTION & MUTATION OBSERVER
@@ -3178,6 +3196,17 @@
             var payloadString = JSON.stringify(payload);
             interactionBuffer = []; // Clear immediately
             if (interactionTimer) { clearTimeout(interactionTimer); interactionTimer = null; }
+            /*try {
+                if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
+                    var success = navigator.sendBeacon(config.endpoint, payloadString);
+                    if (!success && typeof fetch !== 'undefined') {
+                        fetch(config.endpoint, { method: "POST", body: payloadString, keepalive: true }).catch(function () { });
+                    }
+                } else if (typeof fetch !== 'undefined') {
+                    fetch(config.endpoint, { method: "POST", body: payloadString, keepalive: true }).catch(function () { });
+                }
+            } catch (e) { }*/
+
             try {
                 if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
                     var success = navigator.sendBeacon(config.endpoint, payloadString);
@@ -3187,7 +3216,12 @@
                 } else if (typeof fetch !== 'undefined') {
                     fetch(config.endpoint, { method: "POST", body: payloadString, keepalive: true }).catch(function () { });
                 }
+                // Dual-send: also mirror to Supabase so dashboard.html stays live.
+                if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
+                    navigator.sendBeacon('/api/collect', payloadString);
+                }
             } catch (e) { }
+
         }
 
         function pushEvent(eventType, fields, flushImmediately) {
