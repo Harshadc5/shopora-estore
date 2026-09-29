@@ -444,7 +444,43 @@ function renderCart(cart) {
     // below, not by discounting this line. Mirrors app.js's retailOldPrice():
     // an item's list price is its oldPrice when present, else its own price.
     const listSubtotal = +resolvedItems.reduce((sum, i) => sum + (i.oldPrice != null ? i.oldPrice : i.price) * i.qty, 0).toFixed(2);
-    const totalSavings = +(cart.savings_breakdown || []).reduce((sum, s) => sum + s.amount, 0).toFixed(2);
+    // The real site's markdown line is ALWAYS auto-computed from real
+    // catalog prices (app.js's cartSavings(): sum of (oldPrice - price) *
+    // quantity across the real cart) — never a manually staged figure. A
+    // scenario whose items carry a real catalog markdown (oldPrice != null)
+    // but whose own savings_breakdown doesn't separately list a "markdown"
+    // component would otherwise show the per-item strikethrough/badge (from
+    // resolvedItems above) and a correctly-discounted Order total (lineTotal
+    // already uses the real discounted price), while the aggregate Savings
+    // breakdown silently omits that same markdown — auto-add it here so the
+    // breakdown always agrees with what the line items and total already
+    // show, exactly like the real page. Skipped when the scenario already
+    // stages its own "markdown" entry (e.g. stacked-discounts), so it's
+    // never double-counted.
+    const autoMarkdownSavings = +resolvedItems.reduce((sum, i) => sum + (i.oldPrice != null ? (i.oldPrice - i.price) * i.qty : 0), 0).toFixed(2);
+    const stagedComponents = cart.savings_breakdown || [];
+    const hasStagedMarkdown = stagedComponents.some(c => c.type === 'markdown');
+    const components = (autoMarkdownSavings > 0 && !hasStagedMarkdown)
+        ? [{ type: 'markdown', label: (() => {
+              const pcts = [...new Set(resolvedItems.filter(i => i.oldPrice != null).map(i => i.discount).filter(Boolean))];
+              return pcts.length === 1 ? `Markdown (${pcts[0]} off original)` : 'Markdown';
+          })(), amount: autoMarkdownSavings }, ...stagedComponents]
+        : stagedComponents;
+    // Two different totals on purpose. `subtotal` above already prices each
+    // line at its real (post-markdown) product.price, so any auto-injected
+    // markdown component must NOT also be subtracted when computing the
+    // Order total — that would double-count it (once via the discounted
+    // line price, again via the savings total). displaySavings (shown in
+    // the "Total savings" row and fed to renderSavingsBreakdown) includes
+    // the auto-markdown so the breakdown is visually complete; totalSavings
+    // (used below to compute `total`) stays scoped to only what the
+    // scenario itself staged, exactly as before this fix — unaffected for
+    // every scenario that doesn't hit the auto-inject path above, and
+    // identical to the pre-fix calculation for those that do (since
+    // hasStagedMarkdown scenarios never get auto-injection in the first
+    // place).
+    const displaySavings = +components.reduce((sum, s) => sum + s.amount, 0).toFixed(2);
+    const totalSavings = +stagedComponents.reduce((sum, s) => sum + s.amount, 0).toFixed(2);
     // shipping_label is a display string ("FREE delivery" or "$5.99") — parse
     // out the numeric delivery cost so it's actually reflected in the total.
     const deliveryMatch = (cart.shipping_label || '').match(/[\d.]+/);
@@ -524,7 +560,7 @@ function renderCart(cart) {
                 : `<p>Spend <strong>${money(remaining)}</strong> more to unlock free delivery — delivery is ${money(deliveryCost)} on this order</p><div class="progress-track"><i style="width:${pct}%"></i></div>`;
         }
     }
-    set('#summarySavings', money(totalSavings)); // single aggregate value — see comment above on why it can't hold child rows
+    set('#summarySavings', money(displaySavings)); // single aggregate value — see comment above on why it can't hold child rows
     set('#summaryTotal', money(total));
 
     // Header cart-count badge — kept in sync so Pattern 1 doesn't accidentally
@@ -535,7 +571,7 @@ function renderCart(cart) {
         cartBadge.textContent = itemCount;
     }
 
-    renderSavingsBreakdown(cart.savings_breakdown || []);
+    renderSavingsBreakdown(components);
 }
 
 // =====================================================================
