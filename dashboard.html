@@ -789,17 +789,6 @@
           badges.push({ text: `${tiles.length} tiles captured`, warn: false });
           if (markdownCount) badges.push({ text: `${markdownCount} with markdown pricing`, warn: true });
         }
-        // t5.identity_signals only appears when 2+ identity-state-bearing
-        // elements exist on the page (extractTier5 in tag.js) — e.g. a real
-        // header chip saying "recognized/plus" next to a loyalty prompt
-        // saying "guest". Otherwise present in the raw payload but with no
-        // dashboard badge at all, so a scenario like this one was easy to
-        // miss without expanding the full JSON.
-        const identitySignals = (sig.t5 && sig.t5.identity_signals) || [];
-        if (identitySignals.length > 1) {
-          const states = [...new Set(identitySignals.map(s => s.state).filter(Boolean))];
-          badges.push({ text: `identity conflict: ${identitySignals.length} signals (${states.join(' vs ')})`, warn: true });
-        }
         return badges;
       }
 
