@@ -437,6 +437,13 @@ function renderCart(cart) {
     });
 
     const subtotal = +resolvedItems.reduce((sum, i) => sum + i.lineTotal, 0).toFixed(2);
+    // The real cart.html now splits "Items (N)" (#summaryListTotal, pre-markdown
+    // list price) from "Subtotal" (#summarySubtotal) as two separate rows, both
+    // showing the list-price total (app.js's own renderCart() sets both to the
+    // same listSubtotal) — the discount itself shows up via the savings rows
+    // below, not by discounting this line. Mirrors app.js's retailOldPrice():
+    // an item's list price is its oldPrice when present, else its own price.
+    const listSubtotal = +resolvedItems.reduce((sum, i) => sum + (i.oldPrice != null ? i.oldPrice : i.price) * i.qty, 0).toFixed(2);
     const totalSavings = +(cart.savings_breakdown || []).reduce((sum, s) => sum + s.amount, 0).toFixed(2);
     // shipping_label is a display string ("FREE delivery" or "$5.99") — parse
     // out the numeric delivery cost so it's actually reflected in the total.
@@ -476,7 +483,8 @@ function renderCart(cart) {
     const set = (id, text) => { const el = document.querySelector(id); if (el) el.textContent = text; };
     set('#summaryItems', String(itemCount));
     set('#cartItemLabel', `${itemCount} ${itemCount === 1 ? 'item' : 'items'}`);
-    set('#summarySubtotal', money(subtotal));
+    set('#summaryListTotal', money(listSubtotal));
+    set('#summarySubtotal', money(listSubtotal));
 
     // Per-unit price breakdown next to "Items (N)" — only shown when it's
     // unambiguous (a single SKU with qty > 1), e.g. "(2 × $18.99 = $37.98)".
@@ -617,17 +625,31 @@ function renderCheckoutOverride(checkout) {
     }).join('') : '<div class="cart-empty"><p>Your cart is empty.</p><a class="button button-primary" href="./category.html">Shop products</a></div>';
 
     const subtotal = +resolvedItems.reduce((sum, i) => sum + i.lineTotal, 0).toFixed(2);
+    const itemCount = resolvedItems.reduce((sum, i) => sum + i.qty, 0);
     const set = (id, text) => { const el = document.querySelector(id); if (el) el.textContent = text; };
+    // checkout.html's real summary now has an "Items (N)" row (#checkoutItemsRow,
+    // holding #checkoutItemCount + #checkoutListTotal) as well as #checkoutSubtotal
+    // — app.js's own renderCheckout() sets both list-price fields to the same
+    // value (this demo path stages plain product.price items, no markdown data),
+    // and per its own convention #checkoutItemsRow/#checkoutSavingsRow stay
+    // visible whenever the cart has items (they only hide on a genuinely empty
+    // cart) — hiding the Items row unconditionally, as this used to, drops a
+    // whole summary line compared to the real page.
+    set('#checkoutItemCount', String(itemCount));
+    set('#checkoutListTotal', money(subtotal));
     set('#checkoutSubtotal', money(subtotal));
+    set('#checkoutSavings', money(0));
 
-    // app.js's restructured summary (Items / markdown / Total savings) is built
-    // from the REAL cart, which this staged checkout replaces — the scenario
-    // stages no savings, so hide those rows rather than let real-cart values
-    // (or a real markdown construct) sit next to the staged items.
-    ['#checkoutItemsRow', '#checkoutMarkdownRow', '#checkoutSavingsRow'].forEach((sel) => {
+    // No per-item markdown data exists on this staged path, so the markdown
+    // row alone stays hidden; the Items/Total-savings rows follow the real
+    // has-items check instead of being force-hidden.
+    const hasItems = resolvedItems.length > 0;
+    ['#checkoutItemsRow', '#checkoutSavingsRow'].forEach((sel) => {
         const rowEl = document.querySelector(sel);
-        if (rowEl) { rowEl.style.display = 'none'; delete rowEl.dataset.discountType; }
+        if (rowEl) rowEl.style.display = hasItems ? 'flex' : 'none';
     });
+    const checkoutMarkdownRow = document.querySelector('#checkoutMarkdownRow');
+    if (checkoutMarkdownRow) { checkoutMarkdownRow.style.display = 'none'; delete checkoutMarkdownRow.dataset.discountType; }
 
     const shippingFee = checkout.shippingFee || 0;
     const deliveryEl = document.querySelector('#checkoutDelivery');
