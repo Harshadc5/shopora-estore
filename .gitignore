@@ -4,7 +4,6 @@ node_modules/
 # Local-only reference/doc files (not part of the required demo deployment)
 .agents/
 .vscode/
-CLAUDE.md
 HOW-TO-RUN.md
 Observability layer prototype/
 Pdp Css Contract.md
@@ -28,4 +27,6 @@ md files/
 pattern1.txt
 payloads.log
 tools/
+.playwright-mcp
+
 
