@@ -599,6 +599,23 @@ function renderCheckoutOverride(checkout) {
         return;
     }
 
+    // Same reasoning as renderSavingsBreakdown() on cart.html: app.js's real
+    // renderCheckout() runs first (module top-level) off whatever's genuinely
+    // in the browser's cart/session, and can leave real rows behind that this
+    // override never overwrites — a real applied promo code (carried over via
+    // sessionStorage from an earlier cart visit) or a real Shopora Plus 5%
+    // row (auto-injected whenever the URL carries ?identity=logged-in&
+    // member_tier=plus, which several scenarios' links do). Strip all of it
+    // before staging this scenario's own (savings-free) checkout state.
+    const realCoPlusRow = document.querySelector('#coPlusMemberRow');
+    if (realCoPlusRow) realCoPlusRow.remove();
+    ['#checkoutPromoRow', '#checkoutPromoRow2'].forEach((sel) => {
+        const rowEl = document.querySelector(sel);
+        if (rowEl) { rowEl.hidden = true; rowEl.style.display = 'none'; }
+    });
+    const checkoutPromoWrap = document.querySelector('#checkoutPromoInput')?.parentElement;
+    if (checkoutPromoWrap) checkoutPromoWrap.removeAttribute('data-applied-code');
+
     const resolvedItems = (checkout.items || []).map(({ sku, qty }) => {
         const product = products.find(p => p.id === sku);
         if (!product) {
@@ -683,11 +700,29 @@ function renderSavingsBreakdown(components) {
     const autoPlusRow = document.querySelector('#plusMemberRow, #coPlusMemberRow');
     if (autoPlusRow) autoPlusRow.remove();
 
+    // Same reasoning as the Plus row above: app.js's real renderCart() runs
+    // first and populates/shows #markdownRow from whatever is genuinely in
+    // the browser's real cart (independent of this demo override). Left
+    // alone, that produces a real markdown line sitting next to this
+    // function's own synthetic "markdown" component row for the same or a
+    // different amount — a visible duplicate. Hidden (not removed) since,
+    // unlike the Plus row, #markdownRow is real static markup this page
+    // still needs on a future non-demo render.
+    const realMarkdownRow = document.querySelector('#markdownRow');
+    if (realMarkdownRow) { realMarkdownRow.style.display = 'none'; realMarkdownRow.hidden = true; delete realMarkdownRow.dataset.discountType; }
+
     const totalRow = document.querySelector('#summaryTotal')?.closest('.summary-row');
     if (!totalRow) {
         console.warn('[AIORA DEMO] Could not find the total row to insert savings breakdown before.');
         return;
     }
+    // The real static order is: [savings-breakdown] → Total savings →
+    // Shipping → Order total. Anchoring insertion on totalRow (Order total)
+    // instead of the Shipping row puts every dynamic row AFTER Shipping —
+    // matching real cart.html's actual layout instead means anchoring on
+    // the Shipping row itself, falling back to totalRow only if that row is
+    // ever missing.
+    const shippingRow = document.querySelector('#summaryDelivery')?.closest('.summary-row') || totalRow;
 
     // SPEC: Savings breakdown section (.savings-display) contains separate
     // .savings-component divs, each with data-component-type and data-amount.
@@ -700,7 +735,7 @@ function renderSavingsBreakdown(components) {
         savingsDisplay.className = 'savings-display';
         savingsDisplay.style.display = 'contents';
         savingsDisplay.dataset.demoSavingsRow = 'true';
-        totalRow.before(savingsDisplay);
+        shippingRow.before(savingsDisplay);
     } else {
         savingsDisplay.innerHTML = '';
     }
@@ -762,12 +797,12 @@ function renderSavingsBreakdown(components) {
         savingsDisplay.appendChild(row);
     });
 
-    // Move the "You save" aggregate row to right above the total, after all
-    // the individual discount lines, so the overall savings figure is the
-    // last thing seen before the final price.
+    // Move the "You save" aggregate row to right above Shipping, after all
+    // the individual discount lines and before Shipping/Order total — the
+    // real static order (see shippingRow comment above).
     const savingsRow = document.querySelector('#summarySavings')?.closest('.summary-row');
     if (savingsRow) {
-        totalRow.before(savingsRow);
+        shippingRow.before(savingsRow);
         // Bold the whole row so "You save" reads as the aggregate figure,
         // visually distinct from the individual discount lines above it.
         savingsRow.style.fontWeight = '800';
