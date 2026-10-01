@@ -43,6 +43,21 @@ const currentPage = location.pathname.split('/').pop() || 'index.html';
 function applyPromo(code, page) {
   const normalized = code.trim().toUpperCase();
   if (!normalized) return;
+  // AIORA DEMO (scenario: welcome-code-rejected): WELCOME10 is a genuinely
+  // valid code everywhere else on this site (see PROMO_CODES below, and
+  // Pattern 1's welcome-code-returning-member scenario) — this one demo
+  // needs it to fail in the cart, which the real code table alone can't do.
+  // Scoped tightly to this exact code + this exact URL param, so every real
+  // shopper and every other scenario goes through PROMO_CODES completely
+  // unchanged. The real rejection path below (showPromoRejected) runs for
+  // real, so it writes its own correct data-promo-result/data-attempted-code
+  // attributes exactly as it would for any genuinely invalid code — no
+  // separate demo override needs to fake that state.
+  if (normalized === 'WELCOME10' && new URLSearchParams(location.search).get('demo') === 'welcome-code-rejected') {
+    showPromoRejected(normalized, 'Invalid code. Please try again.');
+    toast('Invalid promo code.', 'error');
+    return;
+  }
   if (!PROMO_CODES[normalized]) {
     showPromoRejected(normalized, 'Invalid code. Please try again.');
     toast('Invalid promo code.', 'error');

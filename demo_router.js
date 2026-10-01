@@ -7,7 +7,7 @@ import { demoCustomerHash } from './data/customer.js';
 // versioned separately from this file's own <script> tag ?v= — bump this
 // whenever demo_scenarios.js content changes, so edits can't get stuck
 // behind a stale cached copy.
-import { demoScenarios } from './data/demo_scenarios.js?v=36';
+import { demoScenarios } from './data/demo_scenarios.js?v=37';
 
 function money(n) {
     return '$' + Number(n).toFixed(2);
@@ -57,12 +57,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (scenario.hideSections) hideSections(scenario.hideSections);      // Pattern 2 (2.1)
     if (scenario.cart) {
-        renderCart(scenario.cart);
+        renderCart(scenario.cart, demoSlug);
         // app.js's own 'storage' listener re-renders the REAL (persisted,
         // still empty in demo mode) cart whenever localStorage changes in
         // another same-site tab — which silently wipes this override. Redraw
         // it if that happens, so switching tabs mid-demo doesn't blank the cart.
-        window.addEventListener('storage', () => renderCart(scenario.cart));
+        window.addEventListener('storage', () => renderCart(scenario.cart, demoSlug));
     }
     if (scenario.cartRecommendations) renderCartRecommendations(scenario.cartRecommendations);  // Pattern 3 (3.4)
     if (scenario.checkout) renderCheckoutOverride(scenario.checkout);  // Pattern 4 (4.3)
@@ -405,7 +405,7 @@ function renderNewsletterOverride(newsletter) {
 // markup app.js's own renderCart() produces and the REAL element IDs
 // verified in cart.html.
 // =====================================================================
-function renderCart(cart) {
+function renderCart(cart, demoSlug) {
     const itemsEl = document.querySelector('#cartItems');
     if (!itemsEl) {
         console.error('[AIORA DEMO] #cartItems not found on this page.');
@@ -571,6 +571,18 @@ function renderCart(cart) {
         cartBadge.textContent = itemCount;
     }
 
+    // BUG FOUND AND FIXED (2026-10-01): tag.js's cart_id field (signals.t2.cart_id)
+    // only ever comes from app.js's real syncCartId(), which keys off the REAL,
+    // localStorage-backed cart — this override never touches that storage, so
+    // document.body.dataset.cartId was never set at all on any demo cart page,
+    // confirmed live against real traffic (healthy cart pages carry a real
+    // cart_id; every demo cart page carried none). Fixed by setting the same
+    // attribute here — but deterministically, from the scenario's own slug,
+    // not Date.now()+Math.random() like the real one: a demo must produce the
+    // exact same payload on every reload, not a fresh random id each time.
+    if (itemCount > 0 && demoSlug) document.body.dataset.cartId = 'demo_' + demoSlug;
+    else delete document.body.dataset.cartId;
+
     renderSavingsBreakdown(components);
 }
 
@@ -589,6 +601,29 @@ function applyPromoOverride(promo) {
     if (!promoInput) return;
     const promoField = promoInput.closest('.promo-field') || promoInput.parentElement;
     if (!promoField) return;
+
+    // BUG FOUND AND FIXED (2026-10-01): this used to fake 'rejected' by
+    // setting data-promo-state="rejected" — a value the REAL site never
+    // sets under any circumstance (only this demo invented it), while never
+    // touching data-promo-result/data-attempted-code, the actual attributes
+    // tag.js's code_rejected/code_entered extraction depends on (see app.js's
+    // real showPromoRejected()). Screen said "rejected", payload data said
+    // "not rejected". Confirmed live (2026-10-01) that tag.js actually
+    // RE-SENDS a fresh full payload after a promo click (the click handler's
+    // own waitForIdle(onIdleReady) call, tag.js ~line 3457) — so nothing
+    // needs to be faked at all here. app.js's applyPromo() now has its own
+    // demo-gated branch (see app.js) that genuinely rejects this exact code
+    // only on this exact scenario URL — a real click on the real Apply
+    // button runs the real rejection path for real, which writes its own
+    // correct attributes and triggers that real re-send. Just pre-fill the
+    // input so a visitor only has to click Apply, and leave the real button
+    // enabled (skip the disabling below, which exists to protect an
+    // 'accepted' scenario's staged totals — not a risk here, this scenario
+    // has none).
+    if (promo.state === 'rejected') {
+        if (promo.code) promoInput.value = promo.code;
+        return;
+    }
 
     promoField.dataset.promoState = promo.state;
     if (promo.code) { promoField.dataset.appliedCode = promo.code; promoInput.value = promo.code; }
