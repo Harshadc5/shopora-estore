@@ -3347,7 +3347,7 @@
                 if (isFilterInput) {
                     var isApplied = target.checked;
                     var filterData = {
-                        filter_type: target.getAttribute('aria-label') || target.name || target.closest('fieldset, .filter-group, .facet')?.querySelector('legend, h3, h4, span, strong')?.textContent.trim() || target.closest('[data-filter-group]')?.getAttribute('data-filter-group') || 'unknown',
+                        filter_type: (target.getAttribute('aria-label') || target.name || target.closest('fieldset, .filter-group, .facet')?.querySelector('legend, h3, h4, span, strong')?.textContent.trim() || target.closest('[data-filter-group]')?.getAttribute('data-filter-group') || 'unknown').replace(/\b(active|selected|open|checked|facet-group|-filter|filter-)\b/gi, '').trim(),
                         filter_value: target.value || target.nextElementSibling?.textContent?.trim() || 'unknown',
                         active_filter_count_after: document.querySelectorAll('.filters input:checked, .facets input:checked').length
                     };
@@ -3595,7 +3595,7 @@
                 if (isFilterLink) {
                     var isRemoving = target.closest('.active-filter, .remove-filter') !== null;
                     var filterClickData = {
-                        filter_type: isFilterLink.getAttribute('aria-label') || isFilterLink.closest('fieldset, .filter-group, .facet')?.querySelector('legend, h3, h4, span, strong')?.textContent.trim() || isFilterLink.closest('[data-filter-group]')?.getAttribute('data-filter-group') || 'unknown',
+                        filter_type: (isFilterLink.getAttribute('aria-label') || isFilterLink.closest('fieldset, .filter-group, .facet')?.querySelector('legend, h3, h4, span, strong')?.textContent.trim() || isFilterLink.closest('[data-filter-group]')?.getAttribute('data-filter-group') || 'unknown').replace(/\b(active|selected|open|checked|facet-group|-filter|filter-)\b/gi, '').trim(),
                         filter_value: isFilterLink.getAttribute('data-category') || isFilterLink.textContent.trim(),
                         active_filter_count_after: document.querySelectorAll('.active-filter, .filters input:checked').length + (isRemoving ? -1 : 1)
                     };
@@ -3613,8 +3613,18 @@
                 if (isCardClick && !target.closest('[data-action="add-to-cart"], .add-to-cart, button')) {
                     var cardData = { sku: null, surface: eventSurface(clickedCard), position: 1, displayed_price: null, displayed_currency: null };
                     var cardSiblings = clickedCard.parentElement ? clickedCard.parentElement.children : [];
+                    var positionCounter = 1;
+
                     for (var j = 0; j < cardSiblings.length; j++) {
-                        if (cardSiblings[j] === clickedCard) { cardData.position = j + 1; break; }
+                        var sib = cardSiblings[j];
+                        if (sib === clickedCard) {
+                            cardData.position = positionCounter;
+                            break;
+                        }
+                        // Only increase the counter if the sibling is actually a product card
+                        if (sib.hasAttribute('data-sku') || sib.hasAttribute('data-product-id') || sib.hasAttribute('data-cart-id') || sib.querySelector('[data-sku], [data-product-id]')) {
+                            positionCounter++;
+                        }
                     }
 
                     // Check the clickedCard directly first, then look inside it
@@ -3717,8 +3727,13 @@
                     if (qtyItem) {
                         var qtyData = { sku: null, quantity_before: null, quantity_after: null, line_total_before: null, line_total_after: null };
 
-                        var qtySku = qtyItem.getAttribute('data-cart-id') || qtyItem.getAttribute('data-product-id');
-                        qtyData.sku = qtySku || null;
+                        var qtySku = qtyItem.getAttribute('data-cart-id')
+                            || qtyItem.getAttribute('data-product-id')
+                            || qtyItem.getAttribute('data-sku')
+                            || qtyItem.querySelector('[data-product-id]')?.getAttribute('data-product-id')
+                            || qtyItem.querySelector('[data-sku]')?.getAttribute('data-sku')
+                            || null;
+                        qtyData.sku = qtySku;
 
                         var qtySpan = qtyItem.querySelector('.quantity-control span, input.qty');
                         if (qtySpan) {
@@ -3739,7 +3754,9 @@
                         // Wait 500ms for Shopora to recalculate and redraw the cart
                         setTimeout(function () {
                             // The cart completely redraws, so we must find the item again using its SKU
-                            var freshItem = document.querySelector('[data-cart-id="' + qtySku + '"], [data-product-id="' + qtySku + '"]');
+                            var freshItem = qtySku
+                                ? document.querySelector('[data-cart-id="' + qtySku + '"], [data-product-id="' + qtySku + '"], [data-sku="' + qtySku + '"]')
+                                : null;
                             if (freshItem) {
                                 var newTotalEl = firstMatch(freshItem, FIELD_SEL.cartItemLineTotal);
                                 var parsedAfter = newTotalEl ? parsePrice(newTotalEl.textContent.trim()) : null;
@@ -3776,7 +3793,7 @@
         // ================================================================
         function checkPurchaseCompleted() {
             var url = window.location.href.toLowerCase();
-            if (url.includes('/thank-you') || url.includes('/order-complete') || url.includes('/confirmation') || url.includes('/receipt') || document.body.innerHTML.toLowerCase().includes('thank you for your order')) {
+            if (url.includes('/thank-you') || url.includes('/order-complete') || url.includes('/confirmation') || url.includes('/receipt') || document.body.innerText.toLowerCase().includes('thank you for your order')) {
                 //----old----
                 /*var orderData = { order_confirmed: true, order_total_displayed: null, order_currency: null, line_item_count: 0 };
                 var totalEl = firstMatch(document, FIELD_SEL.checkoutTotal) || document.querySelector('.order-total');
