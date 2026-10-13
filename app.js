@@ -1,5 +1,9 @@
 import { products, categories } from './data/products.js';
 import { demoCustomerHash } from './data/customer.js';
+import { SEARCH } from './search-config.js';
+// Add ?search=local to any category URL to use the old in-browser search.
+const USE_LOCAL_SEARCH = new URLSearchParams(location.search).get('search') === 'local';
+let requestNo = 0;
 
 const CART_KEY = 'shopora-cart-v2';
 const FULL_PRICE_KEY = 'shopora-fullprice-v1';
@@ -415,6 +419,27 @@ function startDealTimer() {
   };
   window.setInterval(tick, 1000);
 }
+async function searchTypesense({ term, category, dealOnly, wishlistOnly, maxPrice, minRating, sort }) {
+  if (wishlistOnly && wishlist.size === 0) return { found: 0, products: [] };
+  const filters = [`price:<=${maxPrice}`, `rating:>=${minRating}`];
+  if (category !== 'all') filters.push(`category:=${category}`);
+  if (dealOnly) filters.push('deal:=true');
+  if (wishlistOnly) filters.push(`id:[${[...wishlist].join(',')}]`);
+  const sorts = {
+    'price-low': 'price:asc', 'price-high': 'price:desc', rating: 'rating:desc', discount: 'discountPct:desc',
+    featured: term ? '_text_match:desc,deal:desc,rating:desc' : 'deal:desc,rating:desc',
+  };
+  const params = new URLSearchParams({
+    q: term || '*', query_by: 'name,description,badge,specs',
+    filter_by: filters.join(' && '), sort_by: sorts[sort] || sorts.featured, per_page: '250',
+  });
+  const res = await fetch(`${SEARCH.url}/collections/${SEARCH.collection}/documents/search?${params}`, {
+    headers: { 'X-TYPESENSE-API-KEY': SEARCH.key },
+  });
+  if (!res.ok) throw new Error(`Typesense ${res.status}: ${await res.text()}`);
+  const data = await res.json();
+  return { found: data.found, products: data.hits.map((hit) => hit.document) };
+}
 function renderCatalog() {
   const template = document.querySelector('#productCardTemplate');
   const grid = document.querySelector('#catalogGrid');
@@ -431,44 +456,67 @@ function renderCatalog() {
   const empty = document.querySelector('#emptyResults');
   search.value = params.get('q') || '';
   filterList.innerHTML = [{ key: 'all', label: 'All departments' }, ...categories].map((category) => `<button data-category="${category.key}" class="${activeCategory === category.key ? 'active' : ''}">${category.label}</button>`).join('');
-  function applyFilters() {
+  async function applyFilters() {
     const term = search.value.trim().toLowerCase();
     const minRating = Number(document.querySelector('input[name="rating"]:checked')?.value || 0);
     const maxPrice = Number(price.value);
-    let filtered = products.filter((product) => {
-      const searchable = [product.name, product.description, product.badge, ...product.specs].join(' ').toLowerCase();
+    const isDemo = new URLSearchParams(location.search).has('demo');
+    const mine = ++requestNo;
+    let filtered, found;
 
-      // Smart search: match whole words or basic plurals, preventing "table" from matching "adjustable" or "tablets"
-      const searchMatch = !term || term.split(/\s+/).every(t => {
-        const escaped = t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        return new RegExp(`\\b${escaped}(s|es)?\\b`, 'i').test(searchable);
-      });
+    if (USE_LOCAL_SEARCH || isDemo) {
+      // isDemo: demo_router.js overwrites #catalogGrid right after this function
+      // returns, on its own later DOMContentLoaded handler. That's only safe if
+      // this function has already finished synchronously — never take the async
+      // Typesense branch on a demo page, or a late-resolving fetch can clobber
+      // demo_router.js's deterministic tiles with real search results.
+      filtered = products.filter((product) => {
+        const searchable = [product.name, product.description, product.badge, ...product.specs].join(' ').toLowerCase();
 
-      return (activeCategory === 'all' || product.category === activeCategory) && (!dealOnly || product.deal) && (!wishlistOnly || wishlist.has(product.id)) && searchMatch && retailPrice(product) <= maxPrice && product.rating >= minRating;
-    });
-
-    // Score relevance so exact name matches appear first
-    if (term) {
-      filtered.forEach(product => {
-        product._relevance = 0;
-        const nameLower = product.name.toLowerCase();
-        term.split(/\s+/).forEach(t => {
-          if (nameLower.includes(t)) product._relevance += 10;
-          else if (product.description.toLowerCase().includes(t)) product._relevance += 1;
+        // Smart search: match whole words or basic plurals, preventing "table" from matching "adjustable" or "tablets"
+        const searchMatch = !term || term.split(/\s+/).every(t => {
+          const escaped = t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          return new RegExp(`\\b${escaped}(s|es)?\\b`, 'i').test(searchable);
         });
+
+        return (activeCategory === 'all' || product.category === activeCategory) && (!dealOnly || product.deal) && (!wishlistOnly || wishlist.has(product.id)) && searchMatch && retailPrice(product) <= maxPrice && product.rating >= minRating;
       });
+
+      // Score relevance so exact name matches appear first
+      if (term) {
+        filtered.forEach(product => {
+          product._relevance = 0;
+          const nameLower = product.name.toLowerCase();
+          term.split(/\s+/).forEach(t => {
+            if (nameLower.includes(t)) product._relevance += 10;
+            else if (product.description.toLowerCase().includes(t)) product._relevance += 1;
+          });
+        });
+      }
+
+      const sorters = {
+        'price-low': (a, b) => retailPrice(a) - retailPrice(b),
+        'price-high': (a, b) => retailPrice(b) - retailPrice(a),
+        rating: (a, b) => b.rating - a.rating,
+        discount: (a, b) => discount(b) - discount(a),
+        featured: (a, b) => term ? ((b._relevance || 0) - (a._relevance || 0) || Number(b.deal) - Number(a.deal) || b.rating - a.rating) : (Number(b.deal) - Number(a.deal) || b.rating - a.rating)
+      };
+      filtered.sort(sorters[sort.value] || sorters.featured);
+      found = filtered.length;
+    } else {
+      try {
+        ({ found, products: filtered } = await searchTypesense({
+          term, category: activeCategory, dealOnly, wishlistOnly, maxPrice, minRating, sort: sort.value,
+        }));
+      } catch (err) {
+        console.error('[search]', err);
+        filtered = []; found = null;
+      }
+      if (mine !== requestNo) return; // a newer search started; drop this stale reply
     }
 
-    const sorters = {
-      'price-low': (a, b) => retailPrice(a) - retailPrice(b),
-      'price-high': (a, b) => retailPrice(b) - retailPrice(a),
-      rating: (a, b) => b.rating - a.rating,
-      discount: (a, b) => discount(b) - discount(a),
-      featured: (a, b) => term ? ((b._relevance || 0) - (a._relevance || 0) || Number(b.deal) - Number(a.deal) || b.rating - a.rating) : (Number(b.deal) - Number(a.deal) || b.rating - a.rating)
-    };
-    filtered.sort(sorters[sort.value] || sorters.featured);
     priceOutput.textContent = 'Up to ' + money(maxPrice);
-    document.querySelector('#resultCount').textContent = filtered.length + ' products';
+    document.querySelector('#resultCount').textContent = found === null ? 'Search unavailable' : found + ' products';
     const categoryName = activeCategory === 'all' ? 'All products' : categories.find((c) => c.key === activeCategory).label;
 
     let headingText = dealOnly ? "Today's deals" : categoryName;
@@ -484,7 +532,7 @@ function renderCatalog() {
     // the banner's number when the banner is actually there to make it.
     let showSaleBanner = false;
     if (saleBanner) {
-      showSaleBanner = activeCategory === 'electronics' && !term && !dealOnly && !new URLSearchParams(location.search).has('demo');
+      showSaleBanner = activeCategory === 'electronics' && !term && !dealOnly && !isDemo;
       saleBanner.hidden = !showSaleBanner;
       saleBanner.style.display = showSaleBanner ? 'flex' : 'none';
       const saleThumbs = saleBanner.querySelector('#categorySaleThumbs');
@@ -507,7 +555,11 @@ function renderCatalog() {
     document.querySelector('#resultsSubheading').textContent = subheadingText;
     grid.innerHTML = '';
     const voltmaxBadgeOverride = showSaleBanner ? { sku: 'el-1', percent: 40 } : null;
-    filtered.forEach((product) => grid.appendChild(buildProductCard(product, template, voltmaxBadgeOverride)));
+    filtered.forEach((product) => {
+      const card = buildProductCard(product, template, voltmaxBadgeOverride);
+      card.dataset.source = (USE_LOCAL_SEARCH || isDemo) ? 'catalog' : 'search';
+      grid.appendChild(card);
+    });
     empty.hidden = filtered.length !== 0;
     grid.hidden = filtered.length === 0;
   }
