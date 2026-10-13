@@ -2,7 +2,7 @@
 // Built for Pattern 1 (1.1–1.5). Verified against the REAL tag.js parsing
 // This file deliberately does NOT render identity or the loyalty chip — app.js's initIdentity() and initLoyaltyChip() already do this correctly, driven by the same ?identity=/&member_tier= URL params, using the exact attributes tag.js reads. The one exception is Scenario 1.4, whose trigger URL has no ?identity= param at all, yet still needs a recognized Plus member — forceIdentity() covers that case only.
 
-import { products } from './data/products.js';
+import { products } from './data/products.js?v=1';
 import { demoCustomerHash } from './data/customer.js';
 // versioned separately from this file's own <script> tag ?v= — bump this
 // whenever demo_scenarios.js content changes, so edits can't get stuck

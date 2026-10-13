@@ -1,4 +1,4 @@
-import { products, categories } from './data/products.js';
+import { products, categories } from './data/products.js?v=1';
 import { demoCustomerHash } from './data/customer.js';
 import { SEARCH } from './search-config.js';
 // Add ?search=local to any category URL to use the old in-browser search.
